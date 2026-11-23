@@ -198,9 +198,9 @@ def _serialize_body(doc: QTextDocument, options: SerializeOptions, warnings: lis
             index += 1
             continue
         level = block.blockFormat().headingLevel()
+        content = _protect_line_start(content)
         if level >= 1:
             content = f"{'#' * min(6, level)} {content}"
-        content = _protect_line_start(content)
         content = _wrap_block_style(block, content, options, warnings)
         parts.append(content)
         index += 1
@@ -664,7 +664,7 @@ def _cell_text(cell, options: SerializeOptions, warnings: list[str]) -> str:
 # Escaping and formatting helpers
 # ---------------------------------------------------------------------------
 
-_ESCAPE_CHARS = "\\`*_[]<>#$~^|"
+_ESCAPE_CHARS = "\\`*_[]<>$~^"
 
 
 def _escape_text(text: str) -> str:
@@ -678,6 +678,9 @@ def _escape_text(text: str) -> str:
 
 
 def _protect_line_start(line: str) -> str:
+    match = re.match(r"^(\s*)([#>])(?=\s)", line)
+    if match:
+        return f"{match.group(1)}\\{match.group(2)}{line[match.end():]}"
     match = re.match(r"^(\s*)([-+])(\s)", line)
     if match:
         return f"{match.group(1)}\\{match.group(2)}{match.group(3)}{line[match.end():]}"

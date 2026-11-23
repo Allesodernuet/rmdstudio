@@ -51,7 +51,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import APP_NAME, __version__, external, icons, paths, theme
+from . import APP_NAME, __version__, external, icons, logbook, paths, theme
 from .dialogs import (
     AboutDialog,
     ChunkDialog,
@@ -102,8 +102,11 @@ class MainWindow(QMainWindow):
         self._knit_progress: QProgressDialog | None = None
         self._knit_output: Path | None = None
         self._knit_canceled = False
+        self._latex_process: QProcess | None = None
+        self._latex_progress: QProgressDialog | None = None
+        self._latex_canceled = False
         self._recent_files = self._load_recent()
-        self._preserve_visual = self._bool_setting("preserve_visual", True)
+        self._preserve_visual = self._bool_setting("preserve_visual", False)
         self._autosave_enabled = self._bool_setting("autosave", True)
         self._autosave_ms = int(self.settings.value("autosave_ms", 800) or 800)
         self._last_warnings: list[str] = []
@@ -132,7 +135,7 @@ class MainWindow(QMainWindow):
         self.editor.image_handler = self._handle_image
         self.front_edit = QPlainTextEdit(self)
         self.front_edit.setObjectName("FrontMatter")
-        self.front_edit.setPlaceholderText("title: \"Untitled\"\noutput: html_document")
+        self.front_edit.setPlaceholderText("title: \"Untitled\"\noutput: pdf_document")
         self.front_edit.setTabStopDistance(self.fontMetrics().horizontalAdvance("    "))
         self.preview = QPlainTextEdit(self)
         self.preview.setObjectName("Preview")
@@ -186,7 +189,7 @@ class MainWindow(QMainWindow):
         self.action_save = self._action("Save", "save", "Ctrl+S", self._save_document)
         self.action_save_as = self._action("Save as...", "save_as", "Ctrl+Shift+S", self.save_as)
         self.action_open_rstudio = self._action("Open in RStudio", "rstudio", "Ctrl+Alt+O", self.open_in_rstudio)
-        self.action_knit = self._action("Knit to HTML", "knit", "Ctrl+Alt+K", self.knit)
+        self.action_knit = self._action("Knit to PDF", "knit", "Ctrl+Alt+K", self.knit)
         self.action_browser_preview = self._action("Rendered preview in browser", "external", None, self.preview_in_browser)
         self.action_settings = self._action("Settings...", "settings", "Ctrl+,", self.open_settings)
         self.action_exit = self._action("Exit", "close", "Ctrl+Q", self.close)
@@ -251,7 +254,7 @@ class MainWindow(QMainWindow):
         self.action_table_header = self._action("Toggle header row", "table", None, self.table_toggle_header)
         self.action_table_delete = self._action("Delete table", "close", None, self.table_delete)
 
-        self.action_preview = self._action("Generated Markdown", "preview", "Ctrl+Shift+P", None, checkable=True)
+        self.action_preview = self._action("Workspace panel", "preview", "Ctrl+Shift+P", None, checkable=True)
         self.action_preview.toggled.connect(self._toggle_preview)
         self.action_front = self._action("YAML front matter", "frontmatter", "Ctrl+Shift+M", None, checkable=True)
         self.action_front.toggled.connect(self._toggle_front)
@@ -525,24 +528,49 @@ class MainWindow(QMainWindow):
 
         self.preview_panel = QFrame(self.splitter)
         self.preview_panel.setObjectName("PreviewPanel")
-        preview_layout = QVBoxLayout(self.preview_panel)
-        preview_layout.setContentsMargins(14, 12, 14, 12)
-        preview_layout.setSpacing(8)
-        preview_header = QHBoxLayout()
-        preview_label = QLabel("PREVIEW")
-        preview_label.setObjectName("SectionLabel")
-        preview_header.addWidget(preview_label)
-        preview_header.addStretch(1)
-        copy_button = QToolButton(self.preview_panel)
+        side_layout = QVBoxLayout(self.preview_panel)
+        side_layout.setContentsMargins(12, 12, 12, 12)
+        side_layout.setSpacing(8)
+        side_header = QHBoxLayout()
+        side_label = QLabel("WORKSPACE")
+        side_label.setObjectName("SectionLabel")
+        side_header.addWidget(side_label)
+        side_header.addStretch(1)
+        close_button = QToolButton(self.preview_panel)
+        close_button.setDefaultAction(self.action_preview)
+        side_header.addWidget(close_button)
+        side_layout.addLayout(side_header)
+        self.side_tabs = QTabWidget(self.preview_panel)
+        self.side_tabs.setObjectName("WorkspaceTabs")
+        self.side_tabs.addTab(self._build_log_tab(), "Work log")
+        self.side_tabs.addTab(self._build_preview_tab(), "Preview")
+        side_layout.addWidget(self.side_tabs, 1)
+        self.preview_panel.show()
+        self.splitter.addWidget(self.preview_panel)
+        self.splitter.setStretchFactor(0, 1)
+        self.splitter.setStretchFactor(1, 0)
+        self.splitter.setSizes([840, 390])
+        self.action_preview.blockSignals(True)
+        self.action_preview.setChecked(True)
+        self.action_preview.blockSignals(False)
+        self.side_tabs.currentChanged.connect(self._side_tab_changed)
+        outer.addWidget(self.splitter, 1)
+        self.setCentralWidget(central)
+
+    def _build_preview_tab(self) -> QWidget:
+        page = QWidget(self.preview_panel)
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+        header = QHBoxLayout()
+        header.addStretch(1)
+        copy_button = QToolButton(page)
         copy_button.setIcon(icons.icon("copy"))
         copy_button.setToolTip("Copy generated Markdown")
         copy_button.clicked.connect(self._copy_generated)
-        preview_header.addWidget(copy_button)
-        close_button = QToolButton(self.preview_panel)
-        close_button.setDefaultAction(self.action_preview)
-        preview_header.addWidget(close_button)
-        preview_layout.addLayout(preview_header)
-        self.preview_tabs = QTabWidget(self.preview_panel)
+        header.addWidget(copy_button)
+        layout.addLayout(header)
+        self.preview_tabs = QTabWidget(page)
         self.preview_tabs.setObjectName("PreviewTabs")
         self.rendered_preview = QTextBrowser(self.preview_tabs)
         self.rendered_preview.setObjectName("RenderedPreview")
@@ -554,22 +582,146 @@ class MainWindow(QMainWindow):
         )
         self.preview_tabs.addTab(self.rendered_preview, "Rendered")
         self.preview_tabs.addTab(self.preview, "Markdown")
-        preview_layout.addWidget(self.preview_tabs, 1)
+        layout.addWidget(self.preview_tabs, 1)
         self.preview_warning = QLabel("")
         self.preview_warning.setObjectName("Warning")
         self.preview_warning.setWordWrap(True)
         self.preview_warning.hide()
-        preview_layout.addWidget(self.preview_warning)
+        layout.addWidget(self.preview_warning)
         preview_button = QPushButton("Open fully rendered preview")
         preview_button.clicked.connect(self.preview_in_browser)
-        preview_layout.addWidget(preview_button)
-        self.preview_panel.hide()
-        self.splitter.addWidget(self.preview_panel)
-        self.splitter.setStretchFactor(0, 1)
-        self.splitter.setStretchFactor(1, 0)
-        self.splitter.setSizes([900, 390])
-        outer.addWidget(self.splitter, 1)
-        self.setCentralWidget(central)
+        layout.addWidget(preview_button)
+        return page
+
+    def _build_log_tab(self) -> QWidget:
+        page = QWidget(self.preview_panel)
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(7)
+        header = QHBoxLayout()
+        self.log_path_label = QLabel("No log file selected")
+        self.log_path_label.setObjectName("Hint")
+        self.log_path_label.setWordWrap(True)
+        header.addWidget(self.log_path_label, 1)
+        choose = QToolButton(page)
+        choose.setIcon(icons.icon("save"))
+        choose.setToolTip("Choose the build log file")
+        choose.clicked.connect(self._choose_log_path)
+        header.addWidget(choose)
+        reload_button = QToolButton(page)
+        reload_button.setIcon(icons.icon("undo"))
+        reload_button.setToolTip("Reload the log from disk")
+        reload_button.clicked.connect(self._reload_log)
+        header.addWidget(reload_button)
+        layout.addLayout(header)
+        self.log_view = QPlainTextEdit(page)
+        self.log_view.setObjectName("LogView")
+        self.log_view.setReadOnly(True)
+        self.log_view.setPlaceholderText("Log entries will appear here.")
+        self.log_view.setFont(QFont(theme.MONO_FONT, 9))
+        layout.addWidget(self.log_view, 1)
+        self.log_input = QPlainTextEdit(page)
+        self.log_input.setObjectName("LogInput")
+        self.log_input.setPlaceholderText("Write a log entry, then click Add entry or press Ctrl+Enter.")
+        self.log_input.setMaximumHeight(92)
+        layout.addWidget(self.log_input)
+        footer = QHBoxLayout()
+        hint = QLabel("Ctrl+Enter adds entry")
+        hint.setObjectName("Hint")
+        footer.addWidget(hint)
+        footer.addStretch(1)
+        self.log_add_button = QPushButton("Add entry")
+        self.log_add_button.setObjectName("Primary")
+        self.log_add_button.clicked.connect(self._append_log_entry)
+        footer.addWidget(self.log_add_button)
+        layout.addLayout(footer)
+        from PySide6.QtGui import QShortcut
+
+        shortcut = QShortcut(QKeySequence("Ctrl+Return"), self.log_input)
+        shortcut.setContext(Qt.ShortcutContext.WidgetShortcut)
+        shortcut.activated.connect(self._append_log_entry)
+        return page
+
+    def _side_tab_changed(self, index: int) -> None:
+        if index == 1:
+            self._refresh_preview()
+            self._render_timer.start(0)
+        else:
+            self._render_timer.stop()
+
+    def _current_log_path(self) -> Path | None:
+        setting = self.settings.value("log_path", "", type=str) or ""
+        return logbook.resolve_log_path(self.path, setting)
+
+    def _update_log_path(self) -> None:
+        path = self._current_log_path()
+        if path is None:
+            self.log_path_label.setText("Save the .Rmd or choose a log file to enable logging.")
+            self.log_path_label.setToolTip("")
+            self.log_input.setEnabled(False)
+            self.log_add_button.setEnabled(False)
+        else:
+            shown = str(path)
+            short = path.name
+            if self.path is not None:
+                try:
+                    short = path.relative_to(self.path.parent).as_posix()
+                except ValueError:
+                    short = str(path)
+                if len(short) > 46:
+                    short = path.name
+            self.log_path_label.setText(short)
+            self.log_path_label.setToolTip(shown)
+            self.log_input.setEnabled(True)
+            self.log_add_button.setEnabled(True)
+        self._reload_log()
+
+    def _reload_log(self) -> None:
+        path = self._current_log_path()
+        text = logbook.read_log(path)
+        self.log_view.setPlainText(text)
+        bar = self.log_view.verticalScrollBar()
+        bar.setValue(bar.maximum())
+
+    def _choose_log_path(self) -> None:
+        current = self._current_log_path()
+        start = current if current is not None else (
+            (self.path.parent / "build-log.md") if self.path else paths.app_data_dir() / "build-log.md"
+        )
+        filename, _ = QFileDialog.getSaveFileName(
+            self, "Choose the build log file", str(start),
+            "Log or Markdown (*.log *.md *.txt);;All files (*)"
+        )
+        if not filename:
+            return
+        path = Path(filename)
+        if not path.suffix:
+            path = path.with_suffix(".md")
+        self.settings.setValue("log_path", logbook.setting_value_for(path, self.path))
+        self.settings.sync()
+        self._update_log_path()
+        self.statusBar().showMessage(f"Build log: {path}", 3500)
+
+    def _append_log_entry(self) -> None:
+        path = self._current_log_path()
+        if path is None:
+            QMessageBox.information(
+                self, "Build log",
+                "Save the .Rmd first, or choose a log file with the button in the Work log panel."
+            )
+            return
+        text = self.log_input.toPlainText().strip()
+        if not text:
+            return
+        try:
+            logbook.append_entry(path, text)
+        except OSError as exc:
+            QMessageBox.critical(self, "Build log", f"Could not write the log file:\n{exc}")
+            return
+        self.log_input.clear()
+        self._reload_log()
+        self.log_input.setFocus()
+        self.statusBar().showMessage(f"Logged to {path.name}", 2500)
 
         self.editor.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.editor.customContextMenuRequested.connect(self._show_editor_menu)
@@ -584,7 +736,7 @@ class MainWindow(QMainWindow):
         bar.addPermanentWidget(self.sync_label)
         self.word_label = QLabel("0 words")
         bar.addPermanentWidget(self.word_label)
-        self.visual_label = QLabel("HTML styles on" if self._preserve_visual else "Markdown only")
+        self.visual_label = QLabel("HTML styling" if self._preserve_visual else "PDF-clean source")
         self.visual_label.setToolTip("Presentational formatting is written as Pandoc HTML attributes")
         bar.addPermanentWidget(self.visual_label)
         self.visual_label.setStyleSheet(f"color: {theme.GOLD if self._preserve_visual else theme.MUTED};")
@@ -1067,7 +1219,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     def _default_yaml(self, title: str = "Untitled") -> str:
         safe = title.replace('"', '\\"')
-        return f'title: "{safe}"\noutput: html_document'
+        return f'title: "{safe}"\noutput: pdf_document'
 
     def _new_document(self, first: bool = False) -> None:
         if not first and not self._maybe_save_changes():
@@ -1094,6 +1246,7 @@ class MainWindow(QMainWindow):
         self._update_file_label()
         self._update_word_count()
         self._update_sync_label()
+        self._update_log_path()
         self._refresh_preview()
         self.editor.setFocus()
         self.statusBar().showMessage("New document", 1800)
@@ -1161,6 +1314,7 @@ class MainWindow(QMainWindow):
         self._update_file_label()
         self._update_word_count()
         self._update_sync_label()
+        self._update_log_path()
         self._refresh_preview()
         self._sync_toolbar()
         self.editor.setFocus()
@@ -1300,6 +1454,7 @@ class MainWindow(QMainWindow):
         if accepted:
             self._add_recent(path)
             self._update_file_label()
+            self._update_log_path()
         return accepted
 
     def _copy_assets(self, old_path: Path, new_path: Path) -> None:
@@ -1355,6 +1510,9 @@ class MainWindow(QMainWindow):
         if self._knit_process is not None:
             self._knit_process.kill()
             self._knit_process.waitForFinished(1000)
+        if self._latex_process is not None:
+            self._latex_process.kill()
+            self._latex_process.waitForFinished(1000)
         self._save_geometry()
         event.accept()
 
@@ -1430,11 +1588,11 @@ class MainWindow(QMainWindow):
             self.preview_warning.hide()
         if self.dirty:
             self._update_sync_label()
-        if self.preview_panel.isVisible():
+        if self.preview_panel.isVisible() and self.side_tabs.currentIndex() == 1:
             self._render_timer.start()
 
     def _refresh_rendered(self) -> None:
-        if not self.preview_panel.isVisible():
+        if not self.preview_panel.isVisible() or self.side_tabs.currentIndex() != 1:
             return
         result = self._last_result
         if result is None:
@@ -1470,7 +1628,9 @@ class MainWindow(QMainWindow):
         self.preview_panel.setVisible(checked)
         if checked:
             self._refresh_preview()
-            self._render_timer.start(0)
+            self._update_log_path()
+            if self.side_tabs.currentIndex() == 1:
+                self._render_timer.start(0)
             width = max(380, min(470, int(self.width() * 0.36)))
             total = max(800, self.splitter.width())
             self.splitter.setSizes([max(440, total - width), width])
@@ -1491,7 +1651,7 @@ class MainWindow(QMainWindow):
             return
         self._preserve_visual = enabled
         self.settings.setValue("preserve_visual", enabled)
-        self.visual_label.setText("HTML styles on" if enabled else "Markdown only")
+        self.visual_label.setText("HTML styling" if enabled else "PDF-clean source")
         self.visual_label.setStyleSheet(f"color: {theme.GOLD if enabled else theme.MUTED};")
         self._generation += 1
         self._update_title()
@@ -1500,8 +1660,8 @@ class MainWindow(QMainWindow):
         if self.path is not None and self._autosave_enabled:
             self._autosave_timer.start(max(250, self._autosave_ms))
         self.statusBar().showMessage(
-            "Presentational formatting will be written as Pandoc HTML styles."
-            if enabled else "Presentational formatting is ignored in the generated Markdown.",
+            "Presentational formatting will be written as Pandoc HTML styles; PDF ignores them."
+            if enabled else "Source is PDF-clean: fonts, colours and spacing stay in the editor only.",
             3500,
         )
 
@@ -1596,6 +1756,7 @@ class MainWindow(QMainWindow):
         if self._write_to_path(force=True, silent=False):
             self._add_recent(path)
             self._update_file_label()
+            self._update_log_path()
 
     # ------------------------------------------------------------------
     # RStudio and preview
@@ -1629,14 +1790,23 @@ class MainWindow(QMainWindow):
         if not rscript:
             QMessageBox.warning(self, "Rscript not found", "Set the Rscript path in Settings (Ctrl+,).")
             return
+        latex_path = self.settings.value("pdflatex_path", "", type=str) or ""
+        latex = external.find_pdflatex(latex_path)
+        if not latex:
+            self._offer_latex_install()
+            return
         if self._knit_process is not None:
             return
         posix = self.path.as_posix().replace("'", "\\'")
-        expression = (
-            "rmarkdown::render("
-            f"'{posix}', output_format='html_document', quiet=TRUE, envir=new.env())"
-        )
-        self._knit_output = self.path.with_suffix(".html")
+        yaml = self.front_edit.toPlainText()
+        if "pdf_document" in yaml:
+            expression = f"rmarkdown::render('{posix}', quiet=TRUE, envir=new.env())"
+        else:
+            expression = (
+                "rmarkdown::render("
+                f"'{posix}', output_format='pdf_document', quiet=TRUE, envir=new.env())"
+            )
+        self._knit_output = self.path.with_suffix(".pdf")
         self._knit_canceled = False
         process = QProcess(self)
         process.setProgram(rscript)
@@ -1646,6 +1816,7 @@ class MainWindow(QMainWindow):
         pandoc = external.find_pandoc(self.settings.value("pandoc_path", "", type=str) or "")
         if pandoc:
             env.insert("RSTUDIO_PANDOC", str(Path(pandoc).parent))
+        env.insert("PATH", str(Path(latex).parent) + ";" + env.value("PATH"))
         try:
             rtemp = paths.app_data_dir() / "rtemp"
             rtemp.mkdir(parents=True, exist_ok=True)
@@ -1659,8 +1830,8 @@ class MainWindow(QMainWindow):
         process.finished.connect(self._knit_finished)
         process.errorOccurred.connect(self._knit_error)
         self._knit_process = process
-        progress = QProgressDialog("Knitting the R Markdown document...", "Cancel", 0, 0, self)
-        progress.setWindowTitle("Knit to HTML")
+        progress = QProgressDialog("Knitting the R Markdown document to PDF...", "Cancel", 0, 0, self)
+        progress.setWindowTitle("Knit to PDF")
         progress.setWindowModality(Qt.WindowModality.WindowModal)
         progress.setMinimumDuration(0)
         progress.canceled.connect(self._cancel_knit)
@@ -1668,15 +1839,128 @@ class MainWindow(QMainWindow):
         progress.show()
         process.start()
 
+    def _offer_latex_install(self) -> None:
+        box = QMessageBox(self)
+        box.setWindowTitle("LaTeX is required for PDF")
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setText("No LaTeX engine was found.")
+        box.setInformativeText(
+            "rmarkdown needs LaTeX to produce a PDF. TinyTeX is a small LaTeX "
+            "distribution and can be installed automatically (about 100 MB, internet required).\n\n"
+            "You can also install MiKTeX or TeX Live and set the pdflatex path in Settings."
+        )
+        install_button = box.addButton("Install TinyTeX", QMessageBox.ButtonRole.AcceptRole)
+        locate_button = box.addButton("Locate pdflatex...", QMessageBox.ButtonRole.ActionRole)
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked == install_button:
+            self._install_tinytex()
+        elif clicked == locate_button:
+            self.open_settings()
+
+    def _install_tinytex(self) -> None:
+        if self._latex_process is not None:
+            return
+        rscript = external.find_rscript(self.settings.value("rscript_path", "", type=str) or "")
+        if not rscript:
+            QMessageBox.warning(self, "TinyTeX", "Rscript was not found. Set its path in Settings.")
+            return
+        install_dir = paths.tinytex_dir()
+        target = install_dir.as_posix().replace("'", "\\'")
+        expression = (
+            "if (!requireNamespace('tinytex', quietly=TRUE)) "
+            "install.packages('tinytex', repos='https://cloud.r-project.org'); "
+            f"tinytex::install_tinytex(dir='{target}', force=TRUE, "
+            "add_path=FALSE, extra_packages='soul')"
+        )
+        process = QProcess(self)
+        process.setProgram(rscript)
+        process.setArguments(["-e", expression])
+        process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+        env = QProcessEnvironment.systemEnvironment()
+        pandoc = external.find_pandoc(self.settings.value("pandoc_path", "", type=str) or "")
+        if pandoc:
+            env.insert("RSTUDIO_PANDOC", str(Path(pandoc).parent))
+        try:
+            rtemp = paths.app_data_dir() / "rtemp"
+            rtemp.mkdir(parents=True, exist_ok=True)
+            env.insert("TMPDIR", str(rtemp))
+            env.insert("TMP", str(rtemp))
+            env.insert("TEMP", str(rtemp))
+        except OSError:
+            pass
+        process.setProcessEnvironment(env)
+        process.finished.connect(self._latex_finished)
+        process.errorOccurred.connect(self._latex_error)
+        self._latex_process = process
+        self._latex_canceled = False
+        progress = QProgressDialog("Installing TinyTeX (this can take several minutes)...", "Cancel", 0, 0, self)
+        progress.setWindowTitle("Install TinyTeX")
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.canceled.connect(self._cancel_latex)
+        self._latex_progress = progress
+        progress.show()
+        process.start()
+
+    def _cancel_latex(self) -> None:
+        self._latex_canceled = True
+        if self._latex_process is not None:
+            self._latex_process.kill()
+            self._latex_process.waitForFinished(1000)
+            self._latex_process = None
+        self._close_progress("_latex_progress")
+        self.statusBar().showMessage("TinyTeX installation cancelled", 3000)
+
+    def _latex_finished(self, exit_code: int, _status) -> None:
+        process = self._latex_process
+        log = ""
+        if process is not None:
+            log = bytes(process.readAllStandardOutput()).decode("utf-8", "replace")
+            self._latex_process = None
+        self._close_progress("_latex_progress")
+        if self._latex_canceled:
+            self._latex_canceled = False
+            return
+        external.clear_cache()
+        if exit_code == 0 and external.find_pdflatex():
+            QMessageBox.information(self, "TinyTeX", "TinyTeX was installed. You can now Knit to PDF.")
+        else:
+            box = QMessageBox(self)
+            box.setWindowTitle("TinyTeX installation failed")
+            box.setIcon(QMessageBox.Icon.Critical)
+            box.setText("TinyTeX could not be installed automatically.")
+            box.setInformativeText("You can install MiKTeX or TinyTeX manually, then set the pdflatex path in Settings.")
+            box.setDetailedText(log or "No output was captured.")
+            box.exec()
+
+    def _latex_error(self, _error) -> None:
+        self._close_progress("_latex_progress")
+        self._latex_process = None
+        if self._latex_canceled:
+            self._latex_canceled = False
+            return
+        QMessageBox.critical(self, "TinyTeX", "Rscript could not be started. Check the Rscript path in Settings.")
+
+    def _close_progress(self, name: str) -> None:
+        progress = getattr(self, name, None)
+        setattr(self, name, None)
+        if progress is not None:
+            try:
+                progress.blockSignals(True)
+            except Exception:
+                pass
+            progress.close()
+            progress.deleteLater()
+
     def _cancel_knit(self) -> None:
         self._knit_canceled = True
         if self._knit_process is not None:
             self._knit_process.kill()
             self._knit_process.waitForFinished(1000)
             self._knit_process = None
-        if self._knit_progress is not None:
-            self._knit_progress.close()
-            self._knit_progress = None
+        self._close_progress("_knit_progress")
         self.statusBar().showMessage("Knit cancelled", 3000)
 
     def _knit_finished(self, exit_code: int, _status) -> None:
@@ -1685,30 +1969,27 @@ class MainWindow(QMainWindow):
         if process is not None:
             log = bytes(process.readAllStandardOutput()).decode("utf-8", "replace")
             self._knit_process = None
-        if self._knit_progress is not None:
-            self._knit_progress.close()
-            self._knit_progress = None
+        self._close_progress("_knit_progress")
         if self._knit_canceled:
             self._knit_canceled = False
             return
         if exit_code == 0:
             if self._knit_output is not None and self._knit_output.is_file():
                 external.open_path(self._knit_output)
-                self.statusBar().showMessage("Knit complete — opening HTML", 4000)
+                self.statusBar().showMessage("Knit complete — opening PDF", 4000)
             else:
-                QMessageBox.information(self, "Knit", "Knit finished, but no HTML output was found.\n\n" + log)
+                QMessageBox.information(self, "Knit", "Knit finished, but no PDF output was found.\n\n" + log)
         else:
             box = QMessageBox(self)
-            box.setWindowTitle("Knit failed")
+            box.setWindowTitle("Knit to PDF failed")
             box.setIcon(QMessageBox.Icon.Critical)
             box.setText("rmarkdown::render returned an error.")
+            box.setInformativeText("Check the R Markdown log, LaTeX installation and YAML output settings.")
             box.setDetailedText(log or "No output was captured.")
             box.exec()
 
     def _knit_error(self, _error) -> None:
-        if self._knit_progress is not None:
-            self._knit_progress.close()
-            self._knit_progress = None
+        self._close_progress("_knit_progress")
         self._knit_process = None
         if self._knit_canceled:
             self._knit_canceled = False
@@ -1806,13 +2087,16 @@ class MainWindow(QMainWindow):
             "<b>Files</b><br>"
             "Autosave writes the .Rmd file after you pause typing. RStudio normally notices "
             "the change and offers to reload it. Use <i>Open in RStudio</i> to open the current file.<br><br>"
-            "<b>Formatting limits</b><br>"
-            "Markdown has no fonts, colours or line spacing. These are written as Pandoc HTML "
-            "attributes, which render in HTML output but are ignored by PDF/Word outputs.<br><br>"
+            "<b>PDF and formatting</b><br>"
+            "The generated source is PDF-clean by default: fonts, colours and line spacing stay "
+            "in the editor. Use <i>View → Preserve visual formatting</i> only for HTML output.<br><br>"
+            "<b>Work log</b><br>"
+            "Type in the Work log tab and press Ctrl+Enter to append a timestamped entry to the "
+            "designated log file. The log file can be changed with the save button in that tab.<br><br>"
             "<b>Shortcuts</b><br>"
             "Ctrl+B / I / U — emphasis &nbsp;·&nbsp; Ctrl+K — link &nbsp;·&nbsp; "
             "Ctrl+Alt+1…4 — headings &nbsp;·&nbsp; Ctrl+Alt+C — R chunk &nbsp;·&nbsp; "
-            "Ctrl+Alt+R — inline R &nbsp;·&nbsp; Ctrl+Shift+P — generated Markdown &nbsp;·&nbsp; F1 — guide"
+            "Ctrl+Alt+R — inline R &nbsp;·&nbsp; Ctrl+Shift+P — workspace panel &nbsp;·&nbsp; F1 — guide"
         )
 
     # ------------------------------------------------------------------

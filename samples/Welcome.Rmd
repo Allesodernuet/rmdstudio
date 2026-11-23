@@ -2,18 +2,14 @@
 title: "The Quiet Machine"
 author: "Nicol"
 date: "2026-11-23"
-output: html_document
+output: pdf_document
 ---
 
 # The Quiet Machine
 
 A **word-processor front end** for R Markdown, with *italic emphasis*,
-[underlined text]{.underline}, and `inline code`. Colours and fonts survive
-as [HTML-only styling]{style="font-family: 'Georgia'; font-size: 14pt; color: #d3a35f"}.
-
-::: {style="text-align: center; line-height: 1.5"}
-A centred paragraph with generous line spacing.
-:::
+[underlined text]{.underline}, and `inline code`. The generated source stays
+plain and PDF-clean.
 
 ## Why another editor?
 
@@ -25,16 +21,17 @@ A centred paragraph with generous line spacing.
 2. Type
 3. Knit
 
-> Markdown is the source of truth. Formatting that HTML can carry is kept as
-> Pandoc attributes.
+> Markdown is the source of truth. Formatting that PDF can carry is kept
+> semantic.
 
 ```{r setup, echo=FALSE}
-library(ggplot2)
+summary(mtcars)
 ```
 
 ```{r plot, fig.width=6, fig.height=4}
-ggplot(mtcars, aes(wt, mpg)) +
-  geom_point()
+plot(mtcars$wt, mtcars$mpg,
+     xlab = "Weight", ylab = "Miles per gallon",
+     main = "Motor Trend cars")
 ```
 
 | Statistic | Value |

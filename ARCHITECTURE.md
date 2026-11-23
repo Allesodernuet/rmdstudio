@@ -8,14 +8,17 @@ and emphasis; it cannot express fonts, sizes, colours or line spacing. R Markdow
 also executes R chunks, so the file format has semantics a Word document does
 not.
 
-The workable design is a rich **semantic** editor plus a two-layer serializer:
+The current target is **Knit to PDF**. The workable design is a rich
+**semantic** editor plus a two-layer serializer:
 
-1. Emit clean Markdown for everything Markdown can express.
-2. Emit Pandoc HTML attributes/spans/divs for visual extras, clearly marked as
-   HTML-only.
+1. Emit clean, PDF-safe Markdown for everything Markdown/LaTeX can express.
+2. Optionally emit Pandoc HTML attributes/spans/divs for visual extras, clearly
+   marked as HTML-only and **off by default**.
 
-That gives a Word-like writing experience and a valid `.Rmd`, while being honest
-about what a PDF/Word renderer can do with the visual layer.
+That gives a Word-like writing experience and a valid `.Rmd` whose PDF output
+is indistinguishable in structure from a file written directly in RStudio.
+Font/colour/spacing controls remain editor-side conveniences; they are not
+serialized in the default PDF mode.
 
 ## Primary concerns
 
@@ -37,15 +40,23 @@ about what a PDF/Word renderer can do with the visual layer.
    A companion RStudio addin could provide tighter sync later.
 5. **Knit environment.** RStudio normally sets `RSTUDIO_PANDOC` and may have a
    different library path. The app discovers Pandoc/Rscript, sets
-   `RSTUDIO_PANDOC`, and uses a writable runtime temp folder for R. Knit failures
-   are shown with the Rscript log.
-6. **Packaging.** PySide6 produces a large but reliable executable. Windows
+   `RSTUDIO_PANDOC`, and uses a writable runtime temp folder for R. PDF knitting
+   also needs LaTeX; the app detects pdflatex, offers a one-click TinyTeX
+   install (including `soul` for underline/strikeout), and shows the Rscript
+   log on failure.
+6. **Build log.** RStudio's Build pane is output-only and has no standard
+   editable build-log file. The app therefore provides a dedicated Work log
+   panel and writes to a user-designated append-only file (default
+   `build.log` next to the document). If a specific log schema is required,
+   it must be matched explicitly.
+7. **Packaging.** PySide6 produces a large but reliable executable. Windows
    SmartScreen warnings are expected because the exe is unsigned. Code signing
    is a distribution concern, not a technical one.
-7. **Words that Markdown treats specially.** Text is escaped conservatively
-   (`*`, `_`, `[`, `]`, `#`, `|`, `\`, `$`, `~`, `^`, `<`, `>`), and line-start
-   list/rule patterns are protected.
-8. **Merged/complex tables.** Markdown pipe tables cannot represent merged cells
+8. **Words that Markdown treats specially.** Inline Markdown punctuation is
+   escaped (`*`, `_`, `[`, `]`, `\`, `$`, `~`, `^`, `<`, `>`); `#`, `>` and
+   list markers are protected only at line start, and `|` only inside tables.
+   This keeps the source looking hand-written rather than machine-escaped.
+9. **Merged/complex tables.** Markdown pipe tables cannot represent merged cells
    or multi-paragraph cells. These are flattened with a warning. An HTML table
    fallback is a future option.
 
@@ -75,22 +86,22 @@ hand-built Markdown converter and a different packaging stack.
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │ MainWindow (main_window.py)                                  │
-│  ribbon · menus · page · front matter · generated markdown   │
-│  file lifecycle · autosave · conflicts · RStudio / knit      │
-└───────────────┬───────────────────────────────┬──────────────┘
-                │                               │
-      ┌─────────▼──────────┐          ┌─────────▼──────────┐
-      │ MarkdownEditor     │          │ FileSync           │
-      │ QTextEdit subclass │          │ hash + watcher     │
-      │ chunks, paste/drop │          │ atomic os.replace  │
-      └─────────┬──────────┘          └─────────┬──────────┘
-                │                               │
-      ┌─────────▼───────────────────────────────▼──────────┐
-      │ model/                                              │
-      │  markdown.py  QTextDocument → Rmd                   │
-      │  importer.py  Rmd → QTextDocument (Pandoc AST)      │
-      │  blocks.py    formatting/chunk/table/image helpers  │
-      │  style.py     custom property IDs + defaults        │
+│  ribbon · page · front matter · work log · preview           │
+│  autosave · conflicts · RStudio · Knit to PDF / TinyTeX      │
+└───────────────┬───────────────┬───────────────┬─────────────┘
+                │               │               │
+      ┌─────────▼──────┐ ┌──────▼──────┐ ┌──────▼──────────┐
+      │ MarkdownEditor │ │ FileSync    │ │ logbook.py      │
+      │ QTextEdit      │ │ hash+watch  │ │ append-only log │
+      │ chunks, paste  │ │ atomic save │ │ designated file │
+      └─────────┬──────┘ └─────────────┘ └─────────────────┘
+                │
+      ┌─────────▼────────────────────────────────────────────┐
+      │ model/                                               │
+      │  markdown.py  QTextDocument → Rmd (PDF-clean default)│
+      │  importer.py  Rmd → QTextDocument (Pandoc AST)       │
+      │  blocks.py    formatting/chunk/table/image helpers   │
+      │  style.py     custom property IDs + defaults         │
       └──────────────────────────────────────────────────────┘
 ```
 
@@ -149,6 +160,16 @@ fenced divs, tables and links. Unknown syntax is kept as raw text with a warning
 or, if Pandoc is unavailable, the whole body is shown as one raw block so a save
 cannot silently rewrite it.
 
+### `logbook.py`
+
+Resolves the designated log file relative to the document (or uses an absolute
+path), formats timestamped entries, and appends with `O_APPEND`-style writes
+plus `fsync`. The UI keeps a read-only view and a small input box; `Ctrl+Enter`
+or **Add entry** writes the entry and refreshes the view. Default:
+`<document folder>/build.log`. There is no standard editable RStudio build
+log; this is a separate file the user can point at whatever their workflow
+expects.
+
 ### `sync.py`
 
 - Debounced autosave (default 800 ms) in the main window.
@@ -166,20 +187,24 @@ cannot silently rewrite it.
 - `external.py` discovers `rstudio.exe`, `Rscript.exe` and `pandoc.exe` in PATH,
   `%ProgramFiles%`, `%LOCALAPPDATA%`, and the Pandoc bundled with RStudio.
 - **Open in RStudio** saves and launches `rstudio.exe <file>`.
-- **Knit to HTML** saves, runs
-  `rmarkdown::render(..., output_format='html_document', envir=new.env())` via a
-  `QProcess` progress dialog, sets `RSTUDIO_PANDOC`, and opens the HTML result.
+- **Knit to PDF** saves, checks for pdflatex, runs
+  `rmarkdown::render(..., output_format='pdf_document', envir=new.env())` via a
+  `QProcess` progress dialog, sets `RSTUDIO_PANDOC` and PATH, and opens the PDF.
+- **TinyTeX installation** is offered when pdflatex is missing. It installs into
+  the app's local TinyTeX folder with the `soul` package included, so
+  underline/strikeout in PDF work.
 - R gets a dedicated writable `rtemp` folder inside the app's data directory,
   because locked-down sessions and sandboxed child processes can make the system
   TEMP folder unusable.
-- No process injection, no telemetry, no network calls.
+- No process injection. The app makes network calls only for the explicit
+  TinyTeX installation (and future AI chat, if enabled).
 
 ## Formatting policy in detail
 
 | Word-like feature | Rmd output | HTML | PDF/Word |
 |---|---|---|---|
-| Bold, italic, strike | `**`, `*`, `~~` | yes | yes |
-| Underline | `[text]{.underline}` | yes | no (Pandoc drops class) |
+| Bold, italic, strike | `**`, `*`, `~~` | yes | yes (soul for strike) |
+| Underline | `[text]{.underline}` | yes | yes, with `soul` LaTeX package |
 | Heading levels | `#`… | yes | yes |
 | Font family/size | `[text]{style="..."}` | yes | no |
 | Colour/highlight | `[text]{style="color/background-color..."}` | yes | no |
@@ -189,9 +214,9 @@ cannot silently rewrite it.
 | Links, images | Markdown links/images | yes | yes |
 | R chunks / inline R | R Markdown fences / backticks | via knitr | via knitr |
 
-This is why the app has a **Preserve visual formatting** toggle: turn it off if
-the target is PDF/Word and clean semantic Markdown matters more than the on-screen
-look.
+This is why the app has a **Preserve visual formatting** toggle and why it is
+**off by default** for the PDF target. The normal source uses only the first
+column of the table; the HTML style layer is opt-in.
 
 ## Packaging
 
@@ -244,6 +269,11 @@ No runtime plugin is required. The recommended development additions are:
 - **Pandoc** is bundled with RStudio at
   `C:\Program Files\RStudio\resources\app\bin\quarto\bin\tools\pandoc.exe`; no
   separate install is needed. A standalone Pandoc is useful for testing.
+- **Inno Setup 6** for the installer, **GitHub CLI** for releases, and
+  PowerShell's `Set-AuthenticodeSignature` for signing with an installed
+  certificate.
+- **TinyTeX** is installed through the app's Knit to PDF prompt, not a developer
+  dependency. MiKTeX or TeX Live work too.
 - **Optional:** `markdown-it-py` if we later replace the importer with a pure
   Python parser; `pyenchant` or the Windows Spell Checking API for spell check;
   PySide6-Addons/QtWebEngine only if we want an embedded rendered preview.
@@ -263,4 +293,7 @@ worse.
 6. Table cell spans → HTML table fallback when visual fidelity is requested.
 7. CSS-class generation instead of inline styles for large documents, so the
    Rmd stays readable and a single `css:` file controls the look.
-8. Code signing and an installer (Inno Setup or WiX) for distribution.
+8. Code signing with a trusted OV/EV or Azure Trusted Signing certificate.
+9. Optional AI chat with per-request usage logging (feasibility documented
+   separately; not implemented).
+10. Match a specific institutional/build-log schema if one is required.

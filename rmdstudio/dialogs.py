@@ -365,8 +365,8 @@ class SettingsDialog(BaseDialog):
         self.delay_spin.setSingleStep(250)
         self.delay_spin.setValue(settings.value("autosave_ms", 800, type=int))
         self.delay_spin.setSuffix(" ms")
-        self.visual_check = QCheckBox("Preserve fonts, colours and spacing as Pandoc HTML styles")
-        self.visual_check.setChecked(settings.value("preserve_visual", True, type=bool))
+        self.visual_check = QCheckBox("Preserve fonts, colours and spacing as Pandoc HTML styles (ignored by PDF)")
+        self.visual_check.setChecked(settings.value("preserve_visual", False, type=bool))
         self.form.addRow("", self.autosave_check)
         self.form.addRow("Autosave delay", self.delay_spin)
         self.form.addRow("", self.visual_check)
@@ -374,8 +374,11 @@ class SettingsDialog(BaseDialog):
         self.pandoc_edit = self._path_row("Pandoc", settings.value("pandoc_path", "", type=str), external.find_pandoc())
         self.rstudio_edit = self._path_row("RStudio", settings.value("rstudio_path", "", type=str), external.find_rstudio())
         self.rscript_edit = self._path_row("Rscript", settings.value("rscript_path", "", type=str), external.find_rscript())
+        self.pdflatex_edit = self._path_row("pdflatex", settings.value("pdflatex_path", "", type=str), external.find_pdflatex())
         hint = QLabel("RStudio and Rscript are only needed for the RStudio/Knit buttons. "
-                      "Pandoc is used to import existing Markdown and render browser previews.")
+                      "Pandoc is used to import existing Markdown and render previews. "
+                      "PDF knitting also needs LaTeX (TinyTeX, MiKTeX or TeX Live); "
+                      "TinyTeX can be installed from the Knit to PDF prompt.")
         hint.setObjectName("Hint")
         hint.setWordWrap(True)
         self._layout.addWidget(hint)
@@ -409,6 +412,7 @@ class SettingsDialog(BaseDialog):
         self.settings.setValue("pandoc_path", self.pandoc_edit.text().strip())
         self.settings.setValue("rstudio_path", self.rstudio_edit.text().strip())
         self.settings.setValue("rscript_path", self.rscript_edit.text().strip())
+        self.settings.setValue("pdflatex_path", self.pdflatex_edit.text().strip())
         self.settings.sync()
         external.clear_cache()
         super().accept()

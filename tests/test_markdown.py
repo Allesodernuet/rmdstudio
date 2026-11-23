@@ -45,7 +45,7 @@ def test_semantic_formatting(qapp):
     cursor.insertText(".")
     result = serialize_rmd(doc, "", SerializeOptions(preserve_visual=False, defaults=Defaults()))
     markdown = result.markdown
-    assert "# Title" in markdown
+    assert "\n# Title\n" in "\n" + markdown
     assert "**bold**" in markdown
     assert "*italic*" in markdown
     assert "[under]{.underline}" in markdown
@@ -142,5 +142,5 @@ def test_escaping(qapp):
     result = serialize_rmd(doc, "", SerializeOptions(preserve_visual=False, defaults=Defaults()))
     line = result.markdown.strip().splitlines()[-1]
     assert line.startswith("\\-")
-    assert "\\#tag" in line
+    assert "#tag" in line
     assert "\\*stars\\*" in line

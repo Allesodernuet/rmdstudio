@@ -198,7 +198,26 @@ QPlainTextEdit#Preview {{
     font-size: 12px;
     border: none;
 }}
-QTabWidget#PreviewTabs::pane {{
+QPlainTextEdit#LogView {{
+    background: #121418;
+    color: #cfc7b8;
+    font-family: "{MONO_FONT}", monospace;
+    font-size: 12px;
+    border: none;
+    padding: 8px;
+}}
+QPlainTextEdit#LogInput {{
+    background: {FIELD};
+    color: {TEXT};
+    border: 1px solid {BORDER};
+    border-radius: 7px;
+    padding: 8px;
+    font-size: 12px;
+}}
+QPlainTextEdit#LogInput:focus {{
+    border-color: {ACCENT};
+}}
+QTabWidget#PreviewTabs::pane, QTabWidget#WorkspaceTabs::pane {{
     border: 1px solid {BORDER};
     border-radius: 6px;
     top: -1px;

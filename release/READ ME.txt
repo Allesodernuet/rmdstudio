@@ -17,19 +17,28 @@ Windows may show SmartScreen because the executable is unsigned. Choose
 
 First use
 ---------
-1. Click Save to choose an .Rmd path.
+1. Click Save to choose an .Rmd path. New documents default to
+   output: pdf_document and PDF-clean source.
 2. Write in the page. The .Rmd file is rewritten after you pause typing.
-3. Open it in RStudio, or use "Open in RStudio" / "Knit to HTML" in the ribbon.
+3. Press "Knit to PDF". If LaTeX is missing, the app offers to install TinyTeX
+   (about 100 MB, internet required).
+4. Use "Open in RStudio" if you prefer to knit there.
 
-RStudio, R and the Pandoc bundled with RStudio are used when available. The app
-does not make network calls or run R code unless you press Knit.
+Work log
+--------
+The Work log tab beside the page appends timestamped entries to a designated
+file. The default is build.log next to the .Rmd. Choose another .md, .log or
+.txt file with the save button in that tab. Entries are written immediately;
+Ctrl+Enter or "Add entry" submits.
 
 Formatting notes
 ----------------
 Bold, italic, headings, lists, tables, links, code and R chunks become normal
-R Markdown. Fonts, colours, highlights and line spacing are stored as Pandoc
-HTML styles: they show in HTML output, not in PDF/Word output. Turn this off in
-View -> Preserve fonts, colours and spacing for clean Markdown.
+R Markdown. Fonts, colours and line spacing stay in the editor and are NOT in
+the default PDF source. "View -> Preserve visual formatting" is an HTML-only
+option; PDF ignores it. Underline/strikeout need the soul LaTeX package, which
+the app's TinyTeX installer includes.
 
+The app is unsigned until a trusted code-signing certificate is configured.
 Settings are stored in %APPDATA%\Rmd Studio (or a userdata folder beside the exe
 if that is not writable).

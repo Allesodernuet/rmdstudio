@@ -80,6 +80,34 @@ def find_rscript(override: str = "") -> str | None:
     return result
 
 
+def find_pdflatex(override: str = "") -> str | None:
+    if override and Path(override).is_file():
+        return override
+    cached = _cache.get("pdflatex")
+    if cached:
+        return cached
+    program_files = Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
+    program_files_x86 = Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"))
+    local_app = Path(os.environ.get("LOCALAPPDATA", ""))
+    roaming = Path(os.environ.get("APPDATA", ""))
+    candidates: list[str | Path] = [
+        _which("pdflatex", "pdflatex.exe"),
+        roaming / "TinyTeX" / "bin" / "windows" / "pdflatex.exe",
+        local_app / "TinyTeX" / "bin" / "windows" / "pdflatex.exe",
+        paths.tinytex_dir() / "bin" / "windows" / "pdflatex.exe",
+        local_app / "RmdStudio" / "TinyTeX" / "bin" / "windows" / "pdflatex.exe",
+        local_app / "Programs" / "MiKTeX" / "miktex" / "bin" / "x64" / "pdflatex.exe",
+        program_files / "MiKTeX" / "miktex" / "bin" / "x64" / "pdflatex.exe",
+        program_files_x86 / "MiKTeX" / "miktex" / "bin" / "pdflatex.exe",
+    ]
+    for year in ("2026", "2025", "2024", "2023"):
+        candidates.append(program_files / "texlive" / year / "bin" / "windows" / "pdflatex.exe")
+        candidates.append(local_app / "Programs" / "texlive" / year / "bin" / "windows" / "pdflatex.exe")
+    result = _first_existing(candidates)
+    _cache["pdflatex"] = result
+    return result
+
+
 def find_pandoc(override: str = "") -> str | None:
     if override and Path(override).is_file():
         return override
@@ -123,7 +151,7 @@ def open_path(path: Path) -> bool:
     return QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
 
 
-def rmarkdown_environment(pandoc_override: str = "") -> dict[str, str]:
+def rmarkdown_environment(pandoc_override: str = "", latex_override: str = "") -> dict[str, str]:
     """RStudio normally sets RSTUDIO_PANDOC for rmarkdown; do the same.
 
     R also needs a writable temporary directory. Some locked-down Windows
@@ -134,6 +162,9 @@ def rmarkdown_environment(pandoc_override: str = "") -> dict[str, str]:
     pandoc = find_pandoc(pandoc_override)
     if pandoc:
         env["RSTUDIO_PANDOC"] = str(Path(pandoc).parent)
+    latex = find_pdflatex(latex_override)
+    if latex:
+        env["PATH"] = str(Path(latex).parent) + os.pathsep + env.get("PATH", "")
     try:
         rtemp = paths.app_data_dir() / "rtemp"
         rtemp.mkdir(parents=True, exist_ok=True)
@@ -165,6 +196,34 @@ def knit_to_html(path: Path, rscript_override: str = "") -> tuple[bool, str]:
             errors="replace",
             timeout=600,
             env=rmarkdown_environment(),
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return False, str(exc)
+    log = (completed.stdout or "") + (completed.stderr or "")
+    return completed.returncode == 0, log.strip() or f"Rscript exited with code {completed.returncode}."
+
+
+def knit_to_pdf(path: Path, rscript_override: str = "", latex_override: str = "") -> tuple[bool, str]:
+    """Run rmarkdown::render with pdf_document. Returns (ok, log)."""
+    rscript = find_rscript(rscript_override)
+    if not rscript:
+        return False, "Rscript was not found. Set its path in Settings."
+    posix = path.as_posix().replace("'", "\\'")
+    expression = (
+        "rmarkdown::render("
+        f"'{posix}', output_format='pdf_document', quiet=TRUE, envir=new.env())"
+    )
+    try:
+        completed = subprocess.run(
+            [rscript, "-e", expression],
+            cwd=str(path.parent),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=900,
+            env=rmarkdown_environment(latex_override=latex_override),
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
@@ -228,5 +287,6 @@ def self_check() -> dict[str, str | None]:
         "rstudio": find_rstudio(),
         "rscript": find_rscript(),
         "pandoc": find_pandoc(),
+        "pdflatex": find_pdflatex(),
         "python": sys.executable,
     }

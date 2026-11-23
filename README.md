@@ -1,35 +1,28 @@
 # Rmd Studio
 
-A graphite, word-processor style front end for R Markdown on Windows.
+A graphite, word-processor style front end for R Markdown on Windows, with a
+dedicated build-log panel and **Knit to PDF** as the primary output.
 
 Write in a rich page with Word-like controls. Rmd Studio translates the document
-into a normal `.Rmd` file continuously, so RStudio can knit it. The editor is
-dark graphite with éclair / parchment text and a caramel accent.
+into a normal, PDF-clean `.Rmd` file continuously, so RStudio can knit it. The
+editor is dark graphite with éclair / parchment text and a caramel accent.
 
-![Rmd Studio editor](screenshots/editor.png)
+![Rmd Studio editor with build log](screenshots/editor.png)
 
 ![Rendered preview and generated Markdown](screenshots/preview.png)
 
 ## Quick start
-
-**Built app:** `release\Rmd Studio.exe`
 
 **Installer:** run `release\INSTALL.cmd` (recommended). It stages the Inno Setup
 installer in the system temp folder; this avoids a setup-path problem when the
 folder contains non-ASCII characters. On a plain ASCII path you can also run
 `release\Rmd Studio Setup 0.1.0.exe` directly.
 
-The app is a self-contained 38 MB executable and needs no Python install.
-Windows may show a SmartScreen warning because it is locally built and unsigned
-— choose *More info → Run anyway* if you trust it.
+**Portable:** `release\Rmd Studio.exe` is self-contained and needs no Python
+install.
 
-**From source:**
-
-```powershell
-python -m venv .venv
-.\.venv\pip install -r requirements-dev.txt
-.\.venv\python launcher.py
-```
+Windows may show a SmartScreen warning because the app is locally built and
+unsigned — choose *More info → Run anyway* if you trust it.
 
 ## What it does
 
@@ -39,32 +32,79 @@ python -m venv .venv
 - Bullet and numbered lists, quotes, tables, links, images, horizontal rules.
 - R code chunks with a chunk-options dialog, inline code and inline R.
 - YAML front-matter editor (title, author, output, CSS, …).
-- Continuous autosave to `.Rmd`, with external-change detection and conflict
-  resolution for files that are also open in RStudio.
-- Generated Markdown pane and a **Rendered preview** that runs Pandoc only (no R
-  code execution) to show the document in a browser.
-- **Open in RStudio** and **Knit to HTML** (runs `rmarkdown::render` locally).
-- Find & replace, undo/redo, word count, recent files, dark title bar.
+- **PDF-clean output by default:** fonts, colours, highlights, alignment and
+  spacing stay in the editor unless you explicitly enable the HTML styling
+  layer. The `.Rmd` stays idiomatic and ready for `pdf_document`.
+- **Work log panel** beside the page. Type an entry, press Add entry or
+  `Ctrl+Enter`, and it is appended immediately to the designated log file with
+  a timestamp. The default is `build.log` next to the `.Rmd`; choose any
+  `.md`, `.log` or `.txt` file with the save button in that panel.
+- **Knit to PDF** with a progress dialog and the Rscript log on failure. If no
+  LaTeX engine is installed, the app offers to install TinyTeX (including
+  `soul` for underline/strikeout support) or lets you point at an existing
+  MiKTeX/TeX Live `pdflatex`.
+- Continuous autosave, external-change detection and conflict resolution for
+  files also open in RStudio.
+- Generated Markdown pane, rendered HTML preview, Open in RStudio, find &
+  replace, undo/redo, word count, recent files, dark title bar.
 
-## The important limitation
+## PDF and formatting policy
 
-R Markdown is a semantic text format. It has no concept of a font family,
-font size, colour, highlight or line spacing. Rmd Studio solves this in two
-layers:
+The final target is a PDF knitted by RStudio/rmarkdown. The default source is:
 
-| Layer | Stored as | Renders in |
-|---|---|---|
-| Semantics: headings, bold, italic, lists, tables, links, code, quotes | Normal Markdown / R Markdown | HTML, PDF, Word |
-| Presentation: fonts, sizes, colours, highlights | Pandoc attribute spans, e.g. `[text]{style="font-size: 14pt; color: #d3a35f"}` | HTML output only |
-| Presentation: alignment, line spacing, paragraph spacing | Pandoc fenced divs with `style="..."` | HTML output only |
+- YAML `output: pdf_document`
+- normal Markdown for structure and emphasis
+- no font/colour/spacing spans or fenced divs
+- R chunks exactly as entered
 
-So "translate fonts and spacing" is feasible, but only HTML output will *show*
-those extra properties. A PDF or Word renderer will ignore the CSS-style
-attributes. The app states this in the UI and has a **View → Preserve fonts,
-colours and spacing** toggle for producing clean, Markdown-only output.
+This is what the PDF layer understands:
 
-Do not use arbitrary fonts/colours if the final document must be a PDF with
-exact typography; use the R Markdown/LaTeX theme or a CSS file instead.
+| Feature | PDF |
+|---|---|
+| Headings, paragraphs, lists, quotes | yes |
+| Bold, italic, strike-through | yes |
+| Underline | yes, via `[text]{.underline}` and the `soul` LaTeX package |
+| Superscript/subscript | yes |
+| Tables, links, images, code chunks | yes |
+| Font family/size/colour | **no** — editor-only |
+| Highlight colour | **no** — editor-only |
+| Paragraph alignment/line spacing | **no** — editor-only |
+
+The optional **View → Preserve fonts, colours and spacing** setting writes the
+presentational layer as Pandoc HTML attributes/fenced divs. That is useful for
+HTML previews, but PDF ignores it. Keep it off for PDF work.
+
+### LaTeX requirement
+
+PDF knitting needs a LaTeX installation. The app detects `pdflatex` on PATH,
+TinyTeX, MiKTeX and TeX Live. If none is found, **Knit to PDF** offers to install
+TinyTeX into `%LOCALAPPDATA%\RmdStudio\TinyTeX`. It also installs `soul` so
+underlines and strike-through render in PDF.
+
+You can also install TinyTeX/MiKTeX/TeX Live yourself and set the `pdflatex`
+path in **Settings**. The first PDF knit may take longer while LaTeX packages
+are located.
+
+## Work log
+
+RStudio's Build pane is output-only; it does not expose a standard input log
+file. Rmd Studio therefore writes a dedicated, append-only build log at the file
+you designate:
+
+- Default: `<folder of the .Rmd>/build.log`
+- Choose another path: the save button in the **Work log** tab
+- A relative choice is stored relative to the document folder; an absolute path
+  is used as-is.
+- Markdown files get entries like:
+  ```md
+  - **2026-11-23 14:30:05** — Checked the methods section against the data.
+  ```
+- `.log` / `.txt` files get `[2026-11-23 14:30:05] ...` entries.
+- Entries are appended, not rewritten, so the log behaves like a journal.
+
+If the RStudio build expects a specific log filename or schema, choose that file
+in the panel. If it expects a particular format, tell me the format and I can
+match it.
 
 ## RStudio workflow
 
@@ -73,7 +113,7 @@ exact typography; use the R Markdown/LaTeX theme or a CSS file instead.
    rewritten atomically.
 3. RStudio normally notices the external change and offers to reload the file.
    If it does not, click the file's tab and reload it, or use **Open in RStudio**.
-4. Press **Knit to HTML** in Rmd Studio, or knit from RStudio.
+4. Press **Knit to PDF** in Rmd Studio, or knit from RStudio.
 
 If RStudio and Rmd Studio both have unsaved changes, the app detects the
 external hash and asks whether to reload, overwrite or save a copy. It never
@@ -109,11 +149,11 @@ the ribbon controls to reintroduce any presentation you actually want. Opening
 | `Ctrl+Shift+7/8` | Numbered / bullet list |
 | `Ctrl+Alt+C` | R code chunk |
 | `Ctrl+Alt+R` | Inline R expression |
-| `Ctrl+Shift+P` | Generated Markdown pane |
+| `Ctrl+Shift+P` | Workspace panel (work log / preview) |
 | `Ctrl+Shift+M` | YAML front matter |
 | `Ctrl+F` / `Ctrl+H` | Find / replace |
 | `Ctrl+Alt+O` | Open in RStudio |
-| `Ctrl+Alt+K` | Knit to HTML |
+| `Ctrl+Alt+K` | Knit to PDF |
 | `F1` | Quick guide |
 
 ## Project layout
@@ -121,21 +161,23 @@ the ribbon controls to reintroduce any presentation you actually want. Opening
 ```
 rmdstudio/
   app.py            application entry point, dark title bar, selftest
-  main_window.py    ribbon, page, preview, files, RStudio and knit actions
+  main_window.py    ribbon, page, workspace, files, log, RStudio, knit
   editor.py         QTextEdit subclass: paste/drop images, chunk Enter/Tab
   theme.py          graphite + éclair theme
   icons.py          QPainter-drawn icons and logo
   dialogs.py        link/image/table/chunk/spacing/find/settings/about
+  logbook.py        designated build-log path + append-only entries
   sync.py           atomic writes, hashing, external-change watcher
-  external.py       RStudio / Rscript / Pandoc discovery
+  external.py       RStudio / Rscript / Pandoc / pdflatex discovery
   model/
     style.py        shared constants and QTextFormat properties
     blocks.py       rich-document operations
     markdown.py     QTextDocument → R Markdown serializer
     importer.py     Rmd → QTextDocument importer (Pandoc AST)
 samples/            bundled welcome document
-tests/              serializer, importer, sync and UI selftests
-tools/              icon generator
+tests/              serializer, importer, sync, log and UI tests
+installer/          Inno Setup script
+tools/              icon generator and Authenticode signing script
 ```
 
 ## Build
@@ -145,12 +187,11 @@ tools/              icon generator
 ```
 
 This runs PyInstaller with `RmdStudio.spec`, copies the result to
-`release\Rmd Studio.exe`, then compiles `installer\RmdStudio.iss` with Inno Setup
-if it is installed. It also writes `release\INSTALL.cmd`, which stages the
-installer in an ASCII temp path before launching it.
+`release\Rmd Studio.exe`, compiles `installer\RmdStudio.iss` with Inno Setup if
+installed, and writes `release\INSTALL.cmd`.
 
-The app has no telemetry and makes no network requests; RStudio/Pandoc/Rscript
-are invoked only for the explicit buttons.
+See `RELEASE.md` for Inno Setup/GitHub CLI usage and `SIGNING.md` for the
+certificate decision and signing steps.
 
 ### Code signing
 
@@ -179,10 +220,14 @@ verification and usually payment:
   Windows treats it as untrusted.
 
 Built with Qt/PySide6 (LGPL-3.0); PyInstaller bundles the Qt libraries needed at
-runtime.
+runtime. The app has no telemetry and makes no network calls except when you
+explicitly install TinyTeX, open an external preview, or use RStudio/Knit.
+RStudio/Pandoc/Rscript are invoked only for explicit actions.
 
 ## Current limits / next steps
 
+- AI chat/usage logging is **not built**; only the feasibility/architecture was
+  discussed.
 - Spell check is not included yet.
 - Footnotes, citations, cross-references, merged table cells and arbitrary
   LaTeX are preserved only approximately on import.
@@ -191,3 +236,5 @@ runtime.
   viewer; currently the preview opens in the default browser.
 - Word-like page pagination/printing is not simulated; R Markdown is the print
   source of truth.
+- The code-signing certificate must still be purchased/issued; the installer is
+  unsigned until then.

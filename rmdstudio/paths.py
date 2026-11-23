@@ -83,6 +83,16 @@ def preview_dir() -> Path:
     return folder
 
 
+def tinytex_dir() -> Path:
+    """Install TinyTeX outside roaming profiles when LOCALAPPDATA is usable."""
+    local = os.environ.get("LOCALAPPDATA")
+    if local:
+        folder = Path(local) / "RmdStudio"
+        if _can_write(folder):
+            return folder / "TinyTeX"
+    return app_data_dir() / "TinyTeX"
+
+
 def resource_path(relative: str) -> Path:
     if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
         return Path(sys._MEIPASS) / relative
