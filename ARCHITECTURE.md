@@ -210,6 +210,16 @@ project root is persisted, and the tree auto-refreshes through
   16,000 characters). The log path is user-configurable.
 - No background AI calls. A request is sent only when the user presses Send.
 
+### Zotero citations
+
+`citations.py` parses Better BibTeX `.bib` files and CSL JSON exports without
+requiring Zotero to be running. The citation dialog searches keys/authors/titles/
+years, supports multi-selection, and returns keys that `MainWindow` inserts as
+Pandoc citations (`[@key]`, `[@key1; @key2]`). On first use it adds
+`bibliography: "relative/path.bib"` to YAML if absent. The bibliography path is
+also stored in Settings as a fallback. The file is re-read on each dialog open,
+which works well with Better BibTeX auto-export.
+
 ### `sync.py`
 
 - Debounced autosave (default 800 ms) in the main window.

@@ -375,11 +375,12 @@ class SettingsDialog(BaseDialog):
         self.rscript_edit = self._path_row("Rscript", settings.value("rscript_path", "", type=str), external.find_rscript())
         self.pdflatex_edit = self._path_row("pdflatex", settings.value("pdflatex_path", "", type=str), external.find_pdflatex())
         self.quarto_edit = self._path_row("Quarto", settings.value("quarto_path", "", type=str), external.find_quarto())
+        self.bib_edit = self._bib_row("Zotero bib", settings.value("zotero_bib_path", "", type=str))
         hint = QLabel("Rscript executes R chunks and renders .Rmd files. Quarto renders .qmd files. "
                       "Pandoc is used to import existing Markdown and render previews. "
                       "PDF output also needs LaTeX (TinyTeX, MiKTeX or TeX Live); "
                       "TinyTeX can be installed from the Render PDF prompt. "
-                      "RStudio is not required.")
+                      "Link a Zotero/Better BibTeX .bib or CSL .json export to enable citations.")
         hint.setObjectName("Hint")
         hint.setWordWrap(True)
         self._layout.addWidget(hint)
@@ -462,6 +463,27 @@ class SettingsDialog(BaseDialog):
         self.form.addRow(label, wrapper)
         return edit
 
+    def _bib_row(self, label: str, value: str) -> QLineEdit:
+        row = QHBoxLayout()
+        edit = QLineEdit(value)
+        edit.setPlaceholderText("Zotero Better BibTeX .bib or CSL .json")
+        browse = QPushButton("Browse...")
+        browse.clicked.connect(lambda: self._browse_bib(edit))
+        row.addWidget(edit, 1)
+        row.addWidget(browse)
+        wrapper = QWidget()
+        wrapper.setLayout(row)
+        self.form.addRow(label, wrapper)
+        return edit
+
+    def _browse_bib(self, edit: QLineEdit) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Choose bibliography", "",
+            "Bibliographies (*.bib *.json);;BibTeX (*.bib);;CSL JSON (*.json);;All files (*)"
+        )
+        if path:
+            edit.setText(path)
+
     def _browse(self, edit: QLineEdit) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "Choose executable", "", "Executables (*.exe);;All files (*)")
         if path:
@@ -475,6 +497,7 @@ class SettingsDialog(BaseDialog):
         self.settings.setValue("rscript_path", self.rscript_edit.text().strip())
         self.settings.setValue("pdflatex_path", self.pdflatex_edit.text().strip())
         self.settings.setValue("quarto_path", self.quarto_edit.text().strip())
+        self.settings.setValue("zotero_bib_path", self.bib_edit.text().strip())
         self.settings.setValue("ai_base_url", self.ai_base.text().strip())
         self.settings.setValue("ai_model", self.ai_model.text().strip())
         self.settings.setValue("ai_system_prompt", self.ai_system.toPlainText().strip())

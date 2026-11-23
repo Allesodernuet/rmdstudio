@@ -1,4 +1,4 @@
-Rmd Studio 0.3.0
+Rmd Studio 0.4.0
 ================
 
 Install
@@ -7,7 +7,7 @@ Run "INSTALL.cmd" (recommended). It stages the Inno Setup installer in the
 system temp folder and launches it. This avoids a setup-path limitation when
 the app folder contains non-ASCII characters.
 
-You can also run "Rmd Studio Setup 0.3.0.exe" directly if the folder path is
+You can also run "Rmd Studio Setup 0.4.0.exe" directly if the folder path is
 plain ASCII.
 
 Portable use: "Rmd Studio.exe" is self-contained and needs no Python install.
@@ -33,6 +33,13 @@ The Work log tab beside the page appends timestamped entries to a designated
 file. The default is build.log next to the document. Choose another .md, .log
 or .txt file with the save button in that tab. Entries are written immediately;
 Ctrl+Enter or "Add entry" submits.
+
+Zotero citations
+----------------
+Link a Zotero/Better BibTeX .bib or CSL .json export in Settings, then use
+Insert -> Zotero citation (Ctrl+Alt+Z). Select one or more entries and the app
+inserts [@key] and adds a bibliography: entry to YAML when needed. The file is
+read fresh each time; Zotero does not need to be running.
 
 AI chat
 -------

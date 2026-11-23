@@ -58,6 +58,7 @@ from PySide6.QtWidgets import (
 
 from . import APP_NAME, __version__, external, icons, logbook, paths, theme
 from .chat_panel import AIChatPanel
+from .citations import CitationDialog
 from .dialogs import (
     AboutDialog,
     ChunkDialog,
@@ -253,6 +254,7 @@ class MainWindow(QMainWindow):
         self.action_style_quote = self._action("Quote", "quote", "Ctrl+Shift+9", lambda: self.apply_style("quote"))
 
         self.action_link = self._action("Link...", "link", "Ctrl+K", self.insert_link)
+        self.action_cite = self._action("Zotero citation...", "quote", "Ctrl+Alt+Z", self.insert_citation)
         self.action_image = self._action("Image...", "image", "Ctrl+Alt+I", self.insert_image)
         self.action_table = self._action("Table...", "table", "Ctrl+Alt+T", self.insert_table)
         self.action_hr = self._action("Horizontal rule", "rule", "Ctrl+Alt+H", self.insert_hr)
@@ -346,6 +348,7 @@ class MainWindow(QMainWindow):
 
         insert_menu = bar.addMenu("&Insert")
         insert_menu.addAction(self.action_link)
+        insert_menu.addAction(self.action_cite)
         insert_menu.addAction(self.action_image)
         insert_menu.addAction(self.action_table)
         insert_menu.addAction(self.action_hr)
@@ -493,6 +496,7 @@ class MainWindow(QMainWindow):
         fmt.addAction(self.action_paragraph_spacing)
         fmt.addSeparator()
         fmt.addAction(self.action_link)
+        fmt.addAction(self.action_cite)
         fmt.addAction(self.action_image)
         fmt.addAction(self.action_table)
         fmt.addAction(self.action_hr)
@@ -1276,6 +1280,105 @@ class MainWindow(QMainWindow):
         blocks.insert_link(cursor, text, url)
         self.editor.setTextCursor(cursor)
         self.editor.setFocus()
+
+    def _bibliography_path_from_yaml(self) -> Path | None:
+        yaml = self.front_edit.toPlainText()
+        match = re.search(r"^\s*bibliography:\s*(.+?)\s*$", yaml, re.MULTILINE)
+        if not match:
+            return None
+        value = match.group(1).strip().strip("'\"")
+        if not value or value.startswith("["):
+            return None
+        path = Path(value)
+        if not path.is_absolute() and self.path is not None:
+            path = self.path.parent / path
+        return path
+
+    def _default_bibliography(self) -> Path | None:
+        yaml_path = self._bibliography_path_from_yaml()
+        if yaml_path is not None and yaml_path.is_file():
+            return yaml_path
+        configured = self.settings.value("zotero_bib_path", "", type=str) or ""
+        if configured and Path(configured).is_file():
+            return Path(configured)
+        bases = []
+        if self.path is not None:
+            bases.append(self.path.parent)
+        if self.project_root is not None:
+            bases.append(self.project_root)
+        found: dict[str, Path] = {}
+        for base in bases:
+            for pattern in ("*.bib", "references/*.bib"):
+                try:
+                    for candidate in base.glob(pattern):
+                        if candidate.is_file():
+                            found[str(candidate.resolve())] = candidate
+                except OSError:
+                    pass
+        return next(iter(found.values())) if len(found) == 1 else None
+
+    def _set_bibliography_yaml(self, bibliography: Path, replace: bool) -> None:
+        yaml = self.front_edit.toPlainText()
+        if self.path is not None:
+            try:
+                value = bibliography.resolve().relative_to(self.path.parent.resolve()).as_posix()
+            except ValueError:
+                value = bibliography.resolve().as_posix()
+        else:
+            value = bibliography.resolve().as_posix()
+        line = f'bibliography: "{value}"'
+        pattern = re.compile(r"^\s*bibliography:\s*.*$", re.MULTILINE)
+        if pattern.search(yaml):
+            if replace:
+                yaml = pattern.sub(line, yaml, count=1)
+            else:
+                return
+        else:
+            yaml = (yaml.rstrip() + "\n" if yaml.strip() else "") + line
+        self.front_edit.blockSignals(True)
+        self.front_edit.setPlainText(yaml)
+        self.front_edit.blockSignals(False)
+        self._on_modified()
+
+    def insert_citation(self) -> None:
+        if not self._ensure_saved():
+            return
+        bibliography = self._default_bibliography()
+        dialog = CitationDialog(bibliography, self)
+        if not dialog.exec():
+            return
+        selected = dialog.selected_citations()
+        if not selected:
+            QMessageBox.information(self, "Citation", "Select at least one bibliography entry.")
+            return
+        chosen = dialog.bibliography_path
+        if chosen is not None:
+            self.settings.setValue("zotero_bib_path", str(chosen))
+            self.settings.sync()
+            existing = self._bibliography_path_from_yaml()
+            replace = existing is None or not existing.is_file()
+            if existing is not None and existing.is_file():
+                try:
+                    same = existing.resolve() == chosen.resolve()
+                except OSError:
+                    same = False
+                if not same:
+                    answer = QMessageBox.question(
+                        self, "Bibliography",
+                        f"This document already links:\n{existing}\n\n"
+                        f"Replace it with the selected bibliography?\n{chosen}",
+                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                        QMessageBox.StandardButton.No,
+                    )
+                    replace = answer == QMessageBox.StandardButton.Yes
+            self._set_bibliography_yaml(chosen, replace=replace)
+        keys = [citation.key for citation in selected]
+        citation_text = f"[@{keys[0]}]" if len(keys) == 1 else "[@" + "; @".join(keys) + "]"
+        cursor = self.editor.textCursor()
+        cursor.insertText(citation_text)
+        self.editor.setTextCursor(cursor)
+        self.editor.setFocus()
+        self.statusBar().showMessage(f"Inserted citation: {citation_text}", 3500)
 
     def insert_image(self) -> None:
         if not self._ensure_saved():
@@ -2411,6 +2514,9 @@ class MainWindow(QMainWindow):
             "Configure an OpenAI-compatible endpoint in Settings, then ask a question. "
             "Every request, error and cancellation is appended to ai-usage.jsonl. "
             "Use Insert reply to place an answer at the cursor for review.<br><br>"
+            "<b>Zotero</b><br>"
+            "Link a Better BibTeX .bib or CSL .json export in Settings, then use "
+            "Ctrl+Alt+Z to insert citations. The bibliography is added to YAML on first use.<br><br>"
             "<b>Shortcuts</b><br>"
             "Ctrl+B / I / U — emphasis &nbsp;·&nbsp; Ctrl+K — link &nbsp;·&nbsp; "
             "Ctrl+Alt+1…4 — headings &nbsp;·&nbsp; Ctrl+Alt+C — R chunk &nbsp;·&nbsp; "

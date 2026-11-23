@@ -19,7 +19,7 @@ Quarto or rmarkdown. RStudio is optional. The editor is dark graphite with
 **Installer:** run `release\INSTALL.cmd` (recommended). It stages the Inno Setup
 installer in the system temp folder; this avoids a setup-path problem when the
 folder contains non-ASCII characters. On a plain ASCII path you can also run
-`release\Rmd Studio Setup 0.3.0.exe` directly.
+`release\Rmd Studio Setup 0.4.0.exe` directly.
 
 **Portable:** `release\Rmd Studio.exe` is self-contained and needs no Python
 install.
@@ -51,6 +51,9 @@ unsigned — choose *More info → Run anyway* if you trust it.
 - **AI chat** with optional document context, formatted insertion at the cursor,
   secure DPAPI key storage, and automatic append-only `ai-usage.jsonl` logging
   of every request, error and cancellation.
+- **Zotero citations:** link a Zotero/Better BibTeX `.bib` or CSL `.json` export,
+  search entries, and insert `[@key]` or multi-key citations. The bibliography
+  is added to YAML automatically.
 - **Render PDF** with a progress dialog and the render log on failure. If no
   LaTeX engine is installed, the app offers to install TinyTeX (including
   `soul` for underline/strikeout support) or lets you point at an existing
@@ -150,6 +153,23 @@ The AI log can contain confidential document text. Turn off **Log full prompt an
 response text** in Settings if you only need metadata. Requests are sent over
 the network only when you press Send; there is no background AI activity.
 
+## Zotero citations
+
+Rmd Studio reads a bibliography file exported from Zotero:
+
+- **Zotero + Better BibTeX**: use a `.bib` auto-export
+- **Plain Zotero**: export the library/collection as CSL JSON and use the `.json`
+
+Open **Insert → Zotero citation…** (or press `Ctrl+Alt+Z`), choose the
+bibliography if it is not linked yet, search by author/title/year/key, and
+select one or more entries. The app inserts `[@key]` or `[@key1; @key2]` at the
+cursor and adds a `bibliography:` entry to YAML if one is missing.
+
+Link the bibliography permanently in **Settings → Zotero bib**. The file is read
+fresh each time the citation dialog opens, so Better BibTeX auto-exports stay
+current without a background service. The picker does not require a running
+Zotero process.
+
 ## Standalone workflow
 
 1. **File → Open project folder** (`Ctrl+Shift+O`) picks the project root, or
@@ -205,6 +225,7 @@ the ribbon controls to reintroduce any presentation you actually want. Opening
 | `Ctrl+B/I/U` | Bold / italic / underline |
 | `Ctrl+Shift+X` | Strike-through |
 | `Ctrl+K` | Link |
+| `Ctrl+Alt+Z` | Insert Zotero citation |
 | `Ctrl+Alt+1…4` | Heading 1–4 |
 | `Ctrl+Alt+0` | Normal paragraph |
 | `Ctrl+Shift+7/8` | Numbered / bullet list |
@@ -233,6 +254,7 @@ rmdstudio/
   ai_log.py         append-only ai-usage.jsonl schema/path helpers
   ai_settings.py    AI defaults and provider presets
   credentials.py    Windows DPAPI API-key encryption
+  citations.py      BibTeX/CSL reader and Zotero citation picker
   sync.py           atomic writes, hashing, external-change watcher
   external.py       Quarto / Rscript / Pandoc / pdflatex discovery
   model/
@@ -270,6 +292,8 @@ message. Quarto/Pandoc/Rscript are invoked only for explicit actions.
   APIs need an OpenAI-compatible gateway such as OpenRouter. It never edits or
   runs code automatically.
 - The AI usage log is a local file, not a tamper-proof institutional audit trail.
+- Zotero integration reads a `.bib`/CSL JSON export; it does not query a running
+  Zotero library through an API.
 - Spell check is not included yet.
 - Footnotes, citations, cross-references, merged table cells and arbitrary
   LaTeX are preserved only approximately on import.
