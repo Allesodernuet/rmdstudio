@@ -10,6 +10,8 @@ test_*_result.txt
 roundtrip.Rmd
 release/*.exe
 release/*.zip
+release/INSTALL.cmd
+release/*.log
 *.pfx
 *.p12
 *.cer
