@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import os
 import tempfile
+import time
 from pathlib import Path
 
 from PySide6.QtCore import QFileSystemWatcher, QObject, QTimer, Signal
@@ -125,6 +126,20 @@ def _text_hash(text: str) -> str:
     return digest.hexdigest()
 
 
+def _replace_with_retry(temp_path: Path, path: Path) -> None:
+    """Replace a file, retrying briefly while antivirus/indexers release it."""
+    delays = (0.05, 0.1, 0.2, 0.4, 0.8)
+    for delay in delays:
+        try:
+            os.replace(temp_path, path)
+            return
+        except OSError as exc:
+            if getattr(exc, "winerror", None) not in (5, 32, 33):
+                raise
+            time.sleep(delay)
+    os.replace(temp_path, path)
+
+
 def _atomic_write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
@@ -137,7 +152,7 @@ def _atomic_write(path: Path, text: str) -> None:
                 os.fsync(handle.fileno())
             except OSError:
                 pass
-        os.replace(temp_path, path)
+        _replace_with_retry(temp_path, path)
     except Exception:
         try:
             temp_path.unlink(missing_ok=True)
