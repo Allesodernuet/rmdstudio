@@ -14,9 +14,14 @@ dark graphite with éclair / parchment text and a caramel accent.
 
 **Built app:** `release\Rmd Studio.exe`
 
-It is a self-contained 38 MB executable. Windows may show a SmartScreen warning
-because it is locally built and unsigned — choose *More info → Run anyway* if
-you trust it.
+**Installer:** run `release\INSTALL.cmd` (recommended). It stages the Inno Setup
+installer in the system temp folder; this avoids a setup-path problem when the
+folder contains non-ASCII characters. On a plain ASCII path you can also run
+`release\Rmd Studio Setup 0.1.0.exe` directly.
+
+The app is a self-contained 38 MB executable and needs no Python install.
+Windows may show a SmartScreen warning because it is locally built and unsigned
+— choose *More info → Run anyway* if you trust it.
 
 **From source:**
 
@@ -139,10 +144,39 @@ tools/              icon generator
 .\.venv\python build.py
 ```
 
-This runs PyInstaller with `RmdStudio.spec` and copies the result to
-`release\Rmd Studio.exe`. The build is unsigned. The app has no telemetry and
-makes no network requests; RStudio/Pandoc/Rscript are invoked only for the
-explicit buttons.
+This runs PyInstaller with `RmdStudio.spec`, copies the result to
+`release\Rmd Studio.exe`, then compiles `installer\RmdStudio.iss` with Inno Setup
+if it is installed. It also writes `release\INSTALL.cmd`, which stages the
+installer in an ASCII temp path before launching it.
+
+The app has no telemetry and makes no network requests; RStudio/Pandoc/Rscript
+are invoked only for the explicit buttons.
+
+### Code signing
+
+`tools/sign.ps1` signs an exe with an Authenticode certificate from the current
+user's certificate store. To sign the app and installer during a build:
+
+```powershell
+$env:RMD_SIGN_THUMBPRINT = "YOUR_CERTIFICATE_THUMBPRINT"
+.\.venv\python build.py
+```
+
+The build signs `release\Rmd Studio.exe` before compiling the installer and then
+signs the installer. Timestamping uses DigiCert's public timestamp service.
+
+A trusted certificate is **not included**. Obtaining one requires identity
+verification and usually payment:
+
+- **OV code-signing certificate** — cheaper, validates the publisher, builds
+  SmartScreen reputation over time. Usually a `.pfx` or hardware token.
+- **EV code-signing certificate** — hardware token/HSM, strongest immediate
+  SmartScreen reputation, more expensive.
+- **Azure Trusted Signing** — cloud signing with an Azure subscription and
+  identity validation; no hardware token, but requires an Azure setup and a
+  different signing command/tool.
+- **Self-signed certificate** — useful for testing the signing pipeline only;
+  Windows treats it as untrusted.
 
 Built with Qt/PySide6 (LGPL-3.0); PyInstaller bundles the Qt libraries needed at
 runtime.

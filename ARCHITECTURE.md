@@ -197,12 +197,41 @@ look.
 
 - `RmdStudio.spec` — PyInstaller one-file, windowed, with icon/version info and
   unused Qt modules excluded.
-- `build.py` — builds and copies the exe to `release\Rmd Studio.exe`.
+- `build.py` — builds and copies the exe to `release\Rmd Studio.exe`, then
+  compiles the Inno Setup installer and writes `release\INSTALL.cmd`.
+- `installer/RmdStudio.iss` — per-user Inno Setup installer, Start Menu/desktop
+  shortcuts and uninstaller.
+- `tools/sign.ps1` — Authenticode signing hook using a certificate in the
+  current user's store; wired to `RMD_SIGN_THUMBPRINT`.
 - `tools/make_icon.py` — generates the PNG/ICO from the QPainter logo.
 - Runtime data lives in `%APPDATA%\Rmd Studio` with a `userdata` fallback next
   to the exe; the generated preview HTML is in that data folder.
 - Images are copied into a sibling `assets/` folder; paths in the `.Rmd` stay
   relative and portable.
+
+### Inno Setup path quirk
+
+The Inno Setup 6.7.3 installer fails to launch from this workspace's `züg`
+folder, which contains a non-ASCII character. The installed app itself runs
+fine from a Unicode path, and the installer works when copied to an ASCII
+folder. `INSTALL.cmd` stages the setup file in `%TEMP%` before launching it and
+is the recommended entry point when the release folder path is not ASCII.
+
+### Signing
+
+The build supports an OV/EV-style Authenticode certificate from the current
+user's certificate store:
+
+```powershell
+$env:RMD_SIGN_THUMBPRINT = "THUMBPRINT"
+.\.venv\python build.py
+```
+
+The exe is signed before the installer is built, then the installer is signed.
+A trusted certificate must be purchased/issued with the publisher's verified
+identity. Options: OV certificate, EV certificate, or Azure Trusted Signing.
+A self-signed certificate can validate the pipeline but will not remove
+SmartScreen warnings.
 
 ## Tools / plugins that help this project
 
