@@ -12,6 +12,7 @@ release/*.exe
 release/_MEI*/
 release-*/
 staging-*/
+share/
 release/*.zip
 release/INSTALL.cmd
 release/*.log
