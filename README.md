@@ -5,8 +5,8 @@ Windows, with a project file browser, a dedicated work log and PDF rendering.
 
 Write in a rich page with Word-like controls. Rmd Studio translates the document
 into normal, PDF-clean `.qmd` / `.Rmd` source continuously and renders it with
-Quarto or rmarkdown. You do not need to open RStudio. The editor is dark graphite
-with éclair / parchment text and a caramel accent.
+Quarto or rmarkdown. RStudio is optional. The editor is dark graphite with
+éclair / parchment text and a caramel accent.
 
 ![Rmd Studio editor with project folders](screenshots/editor.png)
 
@@ -39,7 +39,7 @@ unsigned — choose *More info → Run anyway* if you trust it.
   and double-click a `.qmd`, `.Rmd` or `.md` file to switch documents. Project
   roots are detected from `_quarto.yml`, `.Rproj` or `.git`.
 - **Quarto support:** open a `.qmd` template, create a new Quarto document, and
-  render it with the standalone Quarto CLI. No RStudio window is involved.
+  render it with the standalone Quarto CLI.
 - **PDF-clean output by default:** fonts, colours, highlights, alignment and
   spacing stay in the editor unless you explicitly enable the HTML styling
   layer. Source stays idiomatic for Quarto (`format: pdf`) or R Markdown
@@ -159,7 +159,7 @@ the network only when you press Send; there is no background AI activity.
 3. Write. After a short pause (800 ms by default) the source file is rewritten
    atomically.
 4. Press **Render PDF**. Quarto handles `.qmd`; rmarkdown handles `.Rmd`.
-5. The work log and source sit next to the project. No RStudio window is used.
+5. The work log and source sit next to the project. No IDE is required.
 
 If another editor or process changes the file, the app detects the external hash
 and asks whether to reload, overwrite or save a copy. It never silently
@@ -279,5 +279,5 @@ message. Quarto/Pandoc/Rscript are invoked only for explicit actions.
 - Word-like page pagination/printing is not simulated; Quarto/R Markdown is the
   print source of truth.
 - Release binaries are unsigned; Windows SmartScreen may warn.
-- If RStudio is removed, keep or install standalone Quarto, Pandoc, R and LaTeX;
-  they are required for Quarto files, previews and PDF output.
+- Standalone R, Quarto, Pandoc and LaTeX are required for `.qmd` rendering,
+  previews and PDF output.

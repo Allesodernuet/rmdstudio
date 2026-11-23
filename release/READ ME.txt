@@ -24,8 +24,8 @@ First use
 4. Press "Render PDF". Quarto handles .qmd; rmarkdown handles .Rmd. If LaTeX is
    missing, the app offers to install TinyTeX (about 100 MB, internet required).
 
-You do not need to open RStudio. The app uses standalone Quarto, Rscript,
-Pandoc and LaTeX. If you remove RStudio, install those tools separately.
+The app uses standalone Quarto, Rscript, Pandoc and LaTeX. RStudio is
+optional; install those tools separately if RStudio is not present.
 
 Work log
 --------
