@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import external, icons, theme
+from . import ai_settings, credentials, external, icons, theme
 
 
 class BaseDialog(QDialog):
@@ -356,7 +356,7 @@ class FindReplaceDialog(QDialog):
 
 class SettingsDialog(BaseDialog):
     def __init__(self, settings: QSettings, parent: QWidget | None = None):
-        super().__init__("Settings", parent, 620)
+        super().__init__("Settings", parent, 680)
         self.settings = settings
         self.autosave_check = QCheckBox("Autosave to the .Rmd file while typing")
         self.autosave_check.setChecked(settings.value("autosave", True, type=bool))
@@ -383,7 +383,68 @@ class SettingsDialog(BaseDialog):
         hint.setObjectName("Hint")
         hint.setWordWrap(True)
         self._layout.addWidget(hint)
+
+        ai_label = QLabel("AI CHAT")
+        ai_label.setObjectName("SectionLabel")
+        self._layout.addWidget(ai_label)
+        existing_base = settings.value("ai_base_url", ai_settings.DEFAULT_BASE, type=str) or ai_settings.DEFAULT_BASE
+        existing_model = settings.value("ai_model", ai_settings.DEFAULT_MODEL, type=str) or ai_settings.DEFAULT_MODEL
+        self.ai_preset = QComboBox()
+        for name, base, model in ai_settings.PRESETS:
+            self.ai_preset.addItem(name, (base, model))
+        preset_index = 0
+        for index, (_name, base, _model) in enumerate(ai_settings.PRESETS):
+            if base and base.rstrip("/") == existing_base.rstrip("/"):
+                preset_index = index
+                break
+        else:
+            preset_index = len(ai_settings.PRESETS) - 1
+        self.ai_preset.setCurrentIndex(preset_index)
+        self.ai_base = QLineEdit(existing_base)
+        self.ai_base.setPlaceholderText("https://api.openai.com/v1")
+        self.ai_model = QLineEdit(existing_model)
+        self.ai_model.setPlaceholderText("Model name")
+        self.ai_key = QLineEdit()
+        self.ai_key.setEchoMode(QLineEdit.EchoMode.Password)
+        stored_key = credentials.load_key(settings)
+        if stored_key:
+            self.ai_key.setPlaceholderText("Stored securely — leave blank to keep")
+        else:
+            self.ai_key.setPlaceholderText("API key (optional for localhost)")
+        self.ai_clear_key = QCheckBox("Clear stored API key")
+        self.ai_clear_key.setEnabled(bool(stored_key))
+        self.ai_log_content = QCheckBox("Log full prompt and response text in ai-usage.jsonl")
+        self.ai_log_content.setChecked(settings.value("ai_log_content", True, type=bool))
+        self.ai_system = QPlainTextEdit()
+        self.ai_system.setMaximumHeight(64)
+        self.ai_system.setPlainText(settings.value("ai_system_prompt", ai_settings.DEFAULT_SYSTEM, type=str)
+                                    or ai_settings.DEFAULT_SYSTEM)
+        self.form.addRow("AI preset", self.ai_preset)
+        self.form.addRow("Base URL", self.ai_base)
+        self.form.addRow("Model", self.ai_model)
+        self.form.addRow("API key", self.ai_key)
+        self.form.addRow("", self.ai_clear_key)
+        self.form.addRow("Log content", self.ai_log_content)
+        self.form.addRow("System prompt", self.ai_system)
+        ai_hint = QLabel(
+            "The API key is encrypted with Windows DPAPI and is never written to the "
+            "AI usage log. Any OpenAI-compatible endpoint works; localhost endpoints "
+            "can be used without a key."
+        )
+        ai_hint.setObjectName("Hint")
+        ai_hint.setWordWrap(True)
+        self._layout.addWidget(ai_hint)
+        self.ai_preset.currentIndexChanged.connect(self._apply_ai_preset)
         self.add_buttons("Save settings")
+
+    def _apply_ai_preset(self, index: int) -> None:
+        data = self.ai_preset.itemData(index)
+        if not isinstance(data, tuple) or len(data) != 2:
+            return
+        base, model = data
+        if base:
+            self.ai_base.setText(base)
+            self.ai_model.setText(model)
 
     def _path_row(self, label: str, value: str, detected: str | None) -> QLineEdit:
         row = QHBoxLayout()
@@ -414,6 +475,18 @@ class SettingsDialog(BaseDialog):
         self.settings.setValue("rscript_path", self.rscript_edit.text().strip())
         self.settings.setValue("pdflatex_path", self.pdflatex_edit.text().strip())
         self.settings.setValue("quarto_path", self.quarto_edit.text().strip())
+        self.settings.setValue("ai_base_url", self.ai_base.text().strip())
+        self.settings.setValue("ai_model", self.ai_model.text().strip())
+        self.settings.setValue("ai_system_prompt", self.ai_system.toPlainText().strip())
+        self.settings.setValue("ai_log_content", self.ai_log_content.isChecked())
+        if self.ai_clear_key.isChecked():
+            credentials.clear_key(self.settings)
+        elif self.ai_key.text().strip():
+            try:
+                credentials.save_key(self.settings, self.ai_key.text().strip())
+            except Exception as exc:
+                QMessageBox.critical(self, "API key", f"Could not store the API key securely:\n{exc}")
+                return
         self.settings.sync()
         external.clear_cache()
         super().accept()
@@ -433,8 +506,8 @@ class AboutDialog(BaseDialog):
             "keep clean <code>.qmd</code> / <code>.Rmd</code> source updated in the "
             "background. Formatting that Markdown cannot express stays in the editor "
             "unless the optional HTML styling layer is enabled.<br><br>"
-            "Everything runs locally. No accounts, telemetry or network calls except "
-            "explicit TinyTeX installation or previews."
+            "Everything runs locally. Network calls occur only when you explicitly "
+            "send an AI request, install TinyTeX, or open a preview. No telemetry."
         )
         body.setWordWrap(True)
         body.setTextFormat(Qt.TextFormat.RichText)

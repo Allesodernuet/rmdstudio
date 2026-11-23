@@ -23,6 +23,7 @@ from PySide6.QtGui import (
     QTextCharFormat,
     QTextCursor,
     QTextDocument,
+    QTextDocumentFragment,
     QTextListFormat,
 )
 from PySide6.QtWidgets import (
@@ -56,6 +57,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import APP_NAME, __version__, external, icons, logbook, paths, theme
+from .chat_panel import AIChatPanel
 from .dialogs import (
     AboutDialog,
     ChunkDialog,
@@ -563,6 +565,7 @@ class MainWindow(QMainWindow):
         self.side_tabs.setObjectName("WorkspaceTabs")
         self.side_tabs.addTab(self._build_files_tab(), "Files")
         self.side_tabs.addTab(self._build_log_tab(), "Work log")
+        self.side_tabs.addTab(self._build_ai_tab(), "AI chat")
         self.side_tabs.addTab(self._build_preview_tab(), "Preview")
         side_layout.addWidget(self.side_tabs, 1)
         self.preview_panel.show()
@@ -650,6 +653,8 @@ class MainWindow(QMainWindow):
             self.settings.sync()
         self._select_current_in_files()
         QTimer.singleShot(180, self._select_current_in_files)
+        if hasattr(self, "chat_panel"):
+            self.chat_panel.refresh_settings()
 
     def _refresh_file_tree(self) -> None:
         if self.project_root is not None:
@@ -707,6 +712,34 @@ class MainWindow(QMainWindow):
         )
         if filename:
             self.open_path(Path(filename))
+
+    def _build_ai_tab(self) -> QWidget:
+        self.chat_panel = AIChatPanel(
+            self.settings,
+            selection_provider=self._ai_selection,
+            document_provider=lambda: self.editor.toPlainText(),
+            document_path_provider=lambda: self.path,
+            project_root_provider=lambda: self.project_root,
+            insert_markdown=self._insert_ai_markdown,
+        )
+        self.chat_panel.configure_requested.connect(self.open_settings)
+        return self.chat_panel
+
+    def _ai_selection(self, _mode: str) -> str:
+        text = self.editor.textCursor().selectedText()
+        return text.replace("\u2029", "\n")
+
+    def _insert_ai_markdown(self, markdown: str) -> None:
+        cursor = self.editor.textCursor()
+        if cursor.hasSelection():
+            cursor.removeSelectedText()
+        try:
+            fragment = QTextDocumentFragment.fromMarkdown(markdown)
+            cursor.insertFragment(fragment)
+        except Exception:
+            cursor.insertText(markdown)
+        self.editor.setTextCursor(cursor)
+        self.editor.setFocus()
 
     def _build_preview_tab(self) -> QWidget:
         page = QWidget(self.preview_panel)
@@ -794,7 +827,7 @@ class MainWindow(QMainWindow):
         return page
 
     def _side_tab_changed(self, index: int) -> None:
-        if index == 2:
+        if index == 3:
             self._refresh_preview()
             self._render_timer.start(0)
         else:
@@ -1403,6 +1436,7 @@ class MainWindow(QMainWindow):
         self._update_log_path()
         self._update_render_action()
         self._select_current_in_files()
+        self.chat_panel.refresh_settings()
         self._refresh_preview()
         self.editor.setFocus()
         self.statusBar().showMessage("New Quarto document" if quarto else "New R Markdown document", 1800)
@@ -1486,6 +1520,7 @@ class MainWindow(QMainWindow):
             if not inside:
                 self._set_project_root(self._detect_project_root(path))
             self._select_current_in_files()
+        self.chat_panel.refresh_settings()
         self._refresh_preview()
         self._sync_toolbar()
         self.editor.setFocus()
@@ -1708,6 +1743,7 @@ class MainWindow(QMainWindow):
         if self._latex_process is not None:
             self._latex_process.kill()
             self._latex_process.waitForFinished(1000)
+        self.chat_panel.shutdown()
         self._save_geometry()
         event.accept()
 
@@ -1787,11 +1823,11 @@ class MainWindow(QMainWindow):
             self.preview_warning.hide()
         if self.dirty:
             self._update_sync_label()
-        if self.preview_panel.isVisible() and self.side_tabs.currentIndex() == 2:
+        if self.preview_panel.isVisible() and self.side_tabs.currentIndex() == 3:
             self._render_timer.start()
 
     def _refresh_rendered(self) -> None:
-        if not self.preview_panel.isVisible() or self.side_tabs.currentIndex() != 2:
+        if not self.preview_panel.isVisible() or self.side_tabs.currentIndex() != 3:
             return
         result = self._last_result
         if result is None:
@@ -1828,7 +1864,7 @@ class MainWindow(QMainWindow):
         if checked:
             self._refresh_preview()
             self._update_log_path()
-            if self.side_tabs.currentIndex() == 2:
+            if self.side_tabs.currentIndex() == 3:
                 self._render_timer.start(0)
             width = max(380, min(470, int(self.width() * 0.36)))
             total = max(800, self.splitter.width())
@@ -2347,6 +2383,7 @@ class MainWindow(QMainWindow):
                 self.action_visual.setChecked(preserve)
                 self._syncing = False
                 self._set_visual_mode(preserve)
+            self.chat_panel.refresh_settings()
             self._refresh_preview()
             self.statusBar().showMessage("Settings saved", 2200)
 
@@ -2370,6 +2407,10 @@ class MainWindow(QMainWindow):
             "<b>Work log</b><br>"
             "Type in the Work log tab and press Ctrl+Enter to append a timestamped entry to the "
             "designated log file. The log file can be changed with the save button in that tab.<br><br>"
+            "<b>AI chat</b><br>"
+            "Configure an OpenAI-compatible endpoint in Settings, then ask a question. "
+            "Every request, error and cancellation is appended to ai-usage.jsonl. "
+            "Use Insert reply to place an answer at the cursor for review.<br><br>"
             "<b>Shortcuts</b><br>"
             "Ctrl+B / I / U — emphasis &nbsp;·&nbsp; Ctrl+K — link &nbsp;·&nbsp; "
             "Ctrl+Alt+1…4 — headings &nbsp;·&nbsp; Ctrl+Alt+C — R chunk &nbsp;·&nbsp; "

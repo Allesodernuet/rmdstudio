@@ -239,6 +239,23 @@ QTreeView#FileTree::item:selected {{
 QTreeView#FileTree::branch {{
     background: transparent;
 }}
+QTextBrowser#ChatView {{
+    background: #121418;
+    color: {TEXT};
+    border: none;
+    padding: 6px;
+}}
+QPlainTextEdit#ChatInput {{
+    background: {FIELD};
+    color: {TEXT};
+    border: 1px solid {BORDER};
+    border-radius: 7px;
+    padding: 8px;
+    font-size: 12px;
+}}
+QPlainTextEdit#ChatInput:focus {{
+    border-color: {ACCENT};
+}}
 QTabWidget#PreviewTabs::pane, QTabWidget#WorkspaceTabs::pane {{
     border: 1px solid {BORDER};
     border-radius: 6px;

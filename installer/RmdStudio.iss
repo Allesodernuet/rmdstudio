@@ -3,7 +3,7 @@
 ; The installer is unsigned until a trusted code-signing certificate is configured.
 
 #define MyAppName "Rmd Studio"
-#define MyAppVersion "0.2.0"
+#define MyAppVersion "0.3.0"
 #define MyAppPublisher "Rmd Studio"
 #define MyAppExeName "Rmd Studio.exe"
 #define MyAppId "{{EC869BE7-2705-44EA-8F89-FAE8CA84FC67}"

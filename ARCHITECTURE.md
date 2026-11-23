@@ -59,6 +59,10 @@ serialized in the default PDF mode.
 9. **Merged/complex tables.** Markdown pipe tables cannot represent merged cells
    or multi-paragraph cells. These are flattened with a warning. An HTML table
    fallback is a future option.
+10. **AI privacy and audit.** AI prompts may contain private document text and
+    are sent to the configured provider. The local JSONL log can contain that
+    text, is editable, and is not an institutional audit service. The API key is
+    DPAPI-encrypted; full-content logging is optional.
 
 ## Stack choice
 
@@ -87,7 +91,7 @@ hand-built Markdown converter and a different packaging stack.
 ┌──────────────────────────────────────────────────────────────┐
 │ MainWindow (main_window.py)                                  │
 │  ribbon · page · front matter · Files tree · work log        │
-│  preview · autosave · conflicts · Render PDF / TinyTeX       │
+│  AI chat · preview · autosave · conflicts · Render PDF       │
 └───────────────┬───────────────┬───────────────┬─────────────┘
                 │               │               │
       ┌─────────▼──────┐ ┌──────▼──────┐ ┌──────▼──────────┐
@@ -95,6 +99,11 @@ hand-built Markdown converter and a different packaging stack.
       │ QTextEdit      │ │ hash+watch  │ │ append-only log │
       │ chunks, paste  │ │ atomic save │ │ designated file │
       └─────────┬──────┘ └─────────────┘ └─────────────────┘
+                │
+      ┌─────────▼────────────────────────────────────────────┐
+      │ chat_panel.py → ai_client.py → OpenAI-compatible API │
+      │ credentials.py (DPAPI) · ai_log.py (JSONL usage log) │
+      └──────────────────────────────────────────────────────┘
                 │
       ┌─────────▼────────────────────────────────────────────┐
       │ model/                                               │
@@ -180,6 +189,26 @@ is used. Double-clicking `.qmd`, `.Rmd` and `.md` files calls the same guarded
 switch. The current document is selected and revealed after open. The last
 project root is persisted, and the tree auto-refreshes through
 `QFileSystemModel`.
+
+### AI chat and usage log
+
+- `chat_panel.py` owns the AI tab, conversation, context selector, reply copy /
+  insertion, and request metadata.
+- `ai_client.py` is a minimal non-streaming OpenAI-compatible chat-completions
+  client using `QNetworkAccessManager`; it is asynchronous and cancellable.
+- `credentials.py` encrypts the API key with Windows DPAPI; the ciphertext is in
+  QSettings and the key is never in the AI log.
+- `ai_log.py` appends one JSONL record per request: timestamp, request id,
+  endpoint, model, status, latency, context, document name, token usage, prompt
+  messages and response (content logging can be disabled), and error/cancel
+  details. The default is `ai-usage.jsonl` in the project root, falling back to
+  the document folder or app data.
+- The assistant does not edit the document automatically. **Insert reply** uses
+  `QTextDocumentFragment.fromMarkdown` so the user reviews and inserts text into
+  the rich model.
+- Context is opt-in: none, current selection, or whole document (capped at
+  16,000 characters). The log path is user-configurable.
+- No background AI calls. A request is sent only when the user presses Send.
 
 ### `sync.py`
 
@@ -315,6 +344,6 @@ worse.
 7. CSS-class generation instead of inline styles for large documents, so the
    Rmd stays readable and a single `css:` file controls the look.
 8. Code signing with a trusted OV/EV or Azure Trusted Signing certificate.
-9. Optional AI chat with per-request usage logging (feasibility documented
-   separately; not implemented).
+9. Streaming AI responses and provider-native Anthropic/Gemini adapters.
 10. Match a specific institutional/build-log schema if one is required.
+11. Optional tamper-evident AI log export (hash chain) for formal audit needs.

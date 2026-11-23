@@ -57,7 +57,7 @@ remove SmartScreen warnings.
 
    ```powershell
    Get-AuthenticodeSignature "release\Rmd Studio.exe"
-   Get-AuthenticodeSignature "release\Rmd Studio Setup 0.2.0.exe"
+   Get-AuthenticodeSignature "release\Rmd Studio Setup 0.3.0.exe"
    ```
 
 The build signs the app exe before Inno Setup compiles the installer, then signs

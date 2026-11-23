@@ -2,4 +2,4 @@
 
 APP_NAME = "Rmd Studio"
 APP_ORG = "Rmd Studio"
-__version__ = "0.2.0"
+__version__ = "0.3.0"

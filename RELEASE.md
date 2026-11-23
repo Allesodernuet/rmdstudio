@@ -20,7 +20,7 @@
 Outputs:
 
 - `release\Rmd Studio.exe`
-- `release\Rmd Studio Setup 0.2.0.exe`
+- `release\Rmd Studio Setup 0.3.0.exe`
 - `release\INSTALL.cmd`
 
 `INSTALL.cmd` stages the setup file in `%TEMP%` before launching it. This works
@@ -59,11 +59,11 @@ terminal if the current one does not see the updated PATH.
 Build first, then:
 
 ```powershell
-gh release create v0.2.0 `
-  "release/Rmd Studio Setup 0.2.0.exe" `
+gh release create v0.3.0 `
+  "release/Rmd Studio Setup 0.3.0.exe" `
   "release/Rmd Studio.exe" `
-  --title "Rmd Studio 0.2.0" `
-  --notes "Quarto/R Markdown project browser, work log, standalone Render PDF." `
+  --title "Rmd Studio 0.3.0" `
+  --notes "Quarto/R Markdown project browser, work log, standalone Render PDF, and AI chat with automatic JSONL usage logging." `
   --draft
 ```
 

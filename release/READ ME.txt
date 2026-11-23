@@ -1,4 +1,4 @@
-Rmd Studio 0.2.0
+Rmd Studio 0.3.0
 ================
 
 Install
@@ -7,7 +7,7 @@ Run "INSTALL.cmd" (recommended). It stages the Inno Setup installer in the
 system temp folder and launches it. This avoids a setup-path limitation when
 the app folder contains non-ASCII characters.
 
-You can also run "Rmd Studio Setup 0.2.0.exe" directly if the folder path is
+You can also run "Rmd Studio Setup 0.3.0.exe" directly if the folder path is
 plain ASCII.
 
 Portable use: "Rmd Studio.exe" is self-contained and needs no Python install.
@@ -33,6 +33,20 @@ The Work log tab beside the page appends timestamped entries to a designated
 file. The default is build.log next to the document. Choose another .md, .log
 or .txt file with the save button in that tab. Entries are written immediately;
 Ctrl+Enter or "Add entry" submits.
+
+AI chat
+-------
+The AI chat tab works with any OpenAI-compatible endpoint (OpenAI, OpenRouter,
+LM Studio, or a custom endpoint). Configure the base URL, model and API key in
+Settings. The key is encrypted with Windows DPAPI and is never written to the
+AI log. Localhost endpoints can work without a key.
+
+Every request - including errors and cancellations - is appended to
+ai-usage.jsonl next to the project/document by default. The log includes the
+prompt, response, model, token usage and timing; full-content logging can be
+disabled in Settings. Document context is opt-in (none, selection, whole
+document). "Insert reply" places the last answer at the editor cursor for
+review; the AI never edits or runs code automatically.
 
 Formatting notes
 ----------------

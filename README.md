@@ -12,12 +12,14 @@ with éclair / parchment text and a caramel accent.
 
 ![Rendered preview and generated Markdown](screenshots/preview.png)
 
+![AI chat tab](screenshots/ai-chat.png)
+
 ## Quick start
 
 **Installer:** run `release\INSTALL.cmd` (recommended). It stages the Inno Setup
 installer in the system temp folder; this avoids a setup-path problem when the
 folder contains non-ASCII characters. On a plain ASCII path you can also run
-`release\Rmd Studio Setup 0.2.0.exe` directly.
+`release\Rmd Studio Setup 0.3.0.exe` directly.
 
 **Portable:** `release\Rmd Studio.exe` is self-contained and needs no Python
 install.
@@ -46,6 +48,9 @@ unsigned — choose *More info → Run anyway* if you trust it.
   `Ctrl+Enter`, and it is appended immediately to the designated log file with
   a timestamp. The default is `build.log` next to the document; choose any
   `.md`, `.log` or `.txt` file with the save button in that tab.
+- **AI chat** with optional document context, formatted insertion at the cursor,
+  secure DPAPI key storage, and automatic append-only `ai-usage.jsonl` logging
+  of every request, error and cancellation.
 - **Render PDF** with a progress dialog and the render log on failure. If no
   LaTeX engine is installed, the app offers to install TinyTeX (including
   `soul` for underline/strikeout support) or lets you point at an existing
@@ -113,6 +118,38 @@ you designate:
 If your build expects a specific log filename or schema, choose that file in the
 panel. If it expects a particular format, tell me the format and I can match it.
 
+## AI chat and AI usage log
+
+The **AI chat** tab talks to any OpenAI-compatible chat-completions endpoint:
+
+- OpenAI
+- OpenRouter
+- LM Studio or Ollama’s OpenAI-compatible server
+- a custom local or institutional endpoint
+
+Set the preset, base URL, model and API key in **Settings**. The key is encrypted
+with Windows DPAPI for the current user; it is never written to the AI log.
+Localhost endpoints do not require a key.
+
+The chat can include **no document context**, the **current selection**, or the
+**whole document** (truncated at 16,000 characters). Every request can be logged
+automatically to `ai-usage.jsonl` (default: next to the current project or
+document; configurable in the tab). The log is append-only JSON Lines and
+contains:
+
+- timestamp, request id, model, endpoint, status and latency
+- prompt messages and the full response, if full-content logging is enabled
+- token usage returned by the provider
+- context type, document name, and error/cancellation details
+
+Failed and cancelled requests are logged too. The API key is never included.
+Use **Insert reply** to place the last answer at the editor cursor as formatted
+text, or **Copy reply**.
+
+The AI log can contain confidential document text. Turn off **Log full prompt and
+response text** in Settings if you only need metadata. Requests are sent over
+the network only when you press Send; there is no background AI activity.
+
 ## Standalone workflow
 
 1. **File → Open project folder** (`Ctrl+Shift+O`) picks the project root, or
@@ -174,7 +211,8 @@ the ribbon controls to reintroduce any presentation you actually want. Opening
 | `Ctrl+Shift+7/8` | Numbered / bullet list |
 | `Ctrl+Alt+C` | R code chunk |
 | `Ctrl+Alt+R` | Inline R expression |
-| `Ctrl+Shift+P` | Workspace panel (Files / Work log / Preview) |
+| `Ctrl+Shift+P` | Workspace panel (Files / Work log / AI chat / Preview) |
+| `Ctrl+Enter` | Send an AI chat message |
 | `Ctrl+Shift+M` | YAML front matter |
 | `Ctrl+F` / `Ctrl+H` | Find / replace |
 | `Ctrl+Alt+K` | Render PDF |
@@ -191,6 +229,11 @@ rmdstudio/
   icons.py          QPainter-drawn icons and logo
   dialogs.py        link/image/table/chunk/spacing/find/settings/about
   logbook.py        designated build-log path + append-only entries
+  chat_panel.py     AI tab, context, insertion and request logging
+  ai_client.py      OpenAI-compatible HTTP client
+  ai_log.py         append-only ai-usage.jsonl schema/path helpers
+  ai_settings.py    AI defaults and provider presets
+  credentials.py    Windows DPAPI API-key encryption
   sync.py           atomic writes, hashing, external-change watcher
   external.py       Quarto / Rscript / Pandoc / pdflatex discovery
   model/
@@ -249,13 +292,15 @@ verification and usually payment:
 
 Built with Qt/PySide6 (LGPL-3.0); PyInstaller bundles the Qt libraries needed at
 runtime. The app has no telemetry and makes no network calls except when you
-explicitly install TinyTeX or open an external preview. Quarto/Pandoc/Rscript
-are invoked only for explicit actions.
+explicitly install TinyTeX, open an external preview, or send an AI chat
+message. Quarto/Pandoc/Rscript are invoked only for explicit actions.
 
 ## Current limits / next steps
 
-- AI chat/usage logging is **not built**; only the feasibility/architecture was
-  discussed.
+- AI chat uses non-streaming OpenAI-compatible requests. Anthropic/Gemini native
+  APIs need an OpenAI-compatible gateway such as OpenRouter. It never edits or
+  runs code automatically.
+- The AI usage log is a local file, not a tamper-proof institutional audit trail.
 - Spell check is not included yet.
 - Footnotes, citations, cross-references, merged table cells and arbitrary
   LaTeX are preserved only approximately on import.
