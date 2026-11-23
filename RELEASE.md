@@ -3,6 +3,9 @@
 ## Current state
 
 - Inno Setup 6.7.3 is installed and `installer/RmdStudio.iss` compiles.
+  Inno Setup 6.7.3 prints **“Non-commercial use only”**; a commercial license is
+  required if you distribute this commercially. Personal/academic use is fine
+  under its non-commercial terms.
 - GitHub CLI 2.105 is installed.
 - A local git repository exists on branch `main` with the source committed.
 - There is no GitHub remote and `gh` is not authenticated yet.

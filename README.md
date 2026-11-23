@@ -190,6 +190,10 @@ This runs PyInstaller with `RmdStudio.spec`, copies the result to
 `release\Rmd Studio.exe`, compiles `installer\RmdStudio.iss` with Inno Setup if
 installed, and writes `release\INSTALL.cmd`.
 
+The installed Inno Setup 6.7.3 compiler reports **non-commercial use only**; buy
+its commercial license if you distribute this commercially. Personal/academic
+use is within its non-commercial terms.
+
 See `RELEASE.md` for Inno Setup/GitHub CLI usage and `SIGNING.md` for the
 certificate decision and signing steps.
 

@@ -42,3 +42,6 @@ the app's TinyTeX installer includes.
 The app is unsigned until a trusted code-signing certificate is configured.
 Settings are stored in %APPDATA%\Rmd Studio (or a userdata folder beside the exe
 if that is not writable).
+
+Installer built with Inno Setup 6.7.3, whose compiler is non-commercial use only;
+a commercial Inno Setup license is required for commercial distribution.
