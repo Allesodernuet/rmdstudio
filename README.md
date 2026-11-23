@@ -332,8 +332,8 @@ message. Quarto/Pandoc/Rscript are invoked only for explicit actions.
 - Opening `.docx` directly (rather than pasting) is not implemented.
 - A live embedded rendered preview would need QtWebEngine or a small local HTML
   viewer; currently the preview opens in the default browser.
-- Word-like page pagination/printing is not simulated; Quarto/R Markdown is the
-  print source of truth.
+- Word-like page pagination/printing is not simulated; the generated Markdown,
+  Quarto or R Markdown source is the print source of truth.
 - Release binaries are unsigned; Windows SmartScreen may warn.
 - Standalone R, Quarto, Pandoc and LaTeX are required for `.qmd` rendering,
   previews and PDF output.

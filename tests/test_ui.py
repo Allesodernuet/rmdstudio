@@ -23,7 +23,6 @@ def test_new_document_defaults_to_markdown(qapp):
     assert window.front_panel.isHidden()
     assert not window.action_front.isVisible()
     assert not window.action_knit.isVisible()
-    assert window.knit_button.isHidden()
     assert not window.action_chunk.isVisible()
     assert not window.action_cite.isVisible()
     assert not window.action_visual.isVisible()

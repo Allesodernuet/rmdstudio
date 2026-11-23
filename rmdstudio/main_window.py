@@ -485,10 +485,7 @@ class MainWindow(QMainWindow):
         folder_button.setDefaultAction(self.action_open_folder)
         folder_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         top.addWidget(folder_button)
-        self.knit_button = QToolButton(top)
-        self.knit_button.setDefaultAction(self.action_knit)
-        self.knit_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        top.addWidget(self.knit_button)
+        top.addAction(self.action_knit)
         top.addAction(self.action_settings)
         ribbon_layout.addWidget(top)
 
@@ -873,7 +870,7 @@ class MainWindow(QMainWindow):
     def _update_log_path(self) -> None:
         path = self._current_log_path()
         if path is None:
-            self.log_path_label.setText("Save the .Rmd or choose a log file to enable logging.")
+            self.log_path_label.setText("Save the document or choose a log file to enable logging.")
             self.log_path_label.setToolTip("")
             self.log_input.setEnabled(False)
             self.log_add_button.setEnabled(False)
@@ -924,7 +921,7 @@ class MainWindow(QMainWindow):
         if path is None:
             QMessageBox.information(
                 self, "Build log",
-                "Save the .Rmd first, or choose a log file with the button in the Work log panel."
+                "Save the document first, or choose a log file with the button in the Work log panel."
             )
             return
         text = self.log_input.toPlainText().strip()
@@ -1916,8 +1913,6 @@ class MainWindow(QMainWindow):
         self.action_knit.setText("Render PDF" if self._mode == MODE_QUARTO else "Knit to PDF")
         self.action_knit.setVisible(not markdown)
         self.action_knit.setEnabled(not markdown)
-        if hasattr(self, "knit_button"):
-            self.knit_button.setVisible(not markdown)
 
     def _update_mode_ui(self) -> None:
         markdown = self._mode == MODE_MARKDOWN
@@ -1927,6 +1922,7 @@ class MainWindow(QMainWindow):
         self.front_panel.setVisible((not markdown) and self.action_front.isChecked())
         self.mode_label.setText(MODE_LABELS[self._mode])
         self.mode_label.setToolTip(f"{MODE_LABELS[self._mode]} mode")
+        self.editor.setPlaceholderText(f"Start writing. Your {MODE_SUFFIX[self._mode]} file follows along.")
         if markdown:
             self.visual_label.setText("Plain source")
             self.visual_label.setToolTip("Plain Markdown source; visual font styling stays in the editor")
@@ -2108,7 +2104,7 @@ class MainWindow(QMainWindow):
             box = QMessageBox(self)
             box.setWindowTitle("File missing")
             box.setIcon(QMessageBox.Icon.Warning)
-            box.setText("The .Rmd file was moved or deleted outside Rmd Studio.")
+            box.setText("The file was moved or deleted outside Rmd Studio.")
             box.setInformativeText("Save the document to a new location to keep working.")
             save_as = box.addButton("Save as...", QMessageBox.ButtonRole.AcceptRole)
             box.addButton(QMessageBox.StandardButton.Cancel)
@@ -2170,21 +2166,27 @@ class MainWindow(QMainWindow):
     def _save_copy_after_conflict(self) -> None:
         if self.path is None:
             return
-        suggested = self.path.with_name(self.path.stem + " (copy)" + self.path.suffix)
+        suffix = MODE_SUFFIX[self._mode]
+        suggested = self.path.with_name(self.path.stem + " (copy)" + suffix)
+        if self._mode == MODE_MARKDOWN:
+            filters = "Markdown (*.md *.markdown);;All files (*)"
+        else:
+            filters = "R Markdown (*.Rmd *.rmd);;Quarto (*.qmd);;Markdown (*.md *.markdown);;All files (*)"
         filename, _ = QFileDialog.getSaveFileName(
-            self, "Save a copy", str(suggested),
-            "R Markdown (*.Rmd *.rmd);;Markdown (*.md);;All files (*)"
+            self, "Save a copy", str(suggested), filters
         )
         if not filename:
             return
         path = Path(filename)
         if not path.suffix:
-            path = path.with_suffix(".Rmd")
+            path = path.with_suffix(suffix)
         self._copy_assets(self.path, path)
         self.path = path
+        self._mode = document_mode_for_path(path)
         self.editor.set_base_path(path.parent)
         self.sync.reset(path, "")
         self._force_next_save = True
+        self._update_mode_ui()
         if self._write_to_path(force=True, silent=False):
             self._add_recent(path)
             self._update_file_label()

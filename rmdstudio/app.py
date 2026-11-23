@@ -59,7 +59,7 @@ def _install_exception_hook() -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog=APP_NAME, add_help=True)
-    parser.add_argument("file", nargs="?", help="R Markdown file to open")
+    parser.add_argument("file", nargs="?", help="Markdown, R Markdown or Quarto file to open")
     parser.add_argument("--version", action="store_true", help="show the version and exit")
     parser.add_argument("--demo", action="store_true", help="open the bundled sample")
     parser.add_argument("--selftest", action="store_true", help=argparse.SUPPRESS)

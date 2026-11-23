@@ -62,6 +62,9 @@ def app_data_dir() -> Path:
 
 
 def settings_path() -> Path:
+    override = os.environ.get("RMDSTUDIO_SETTINGS", "").strip()
+    if override:
+        return Path(override).expanduser()
     try:
         return app_data_dir() / "settings.ini"
     except OSError:

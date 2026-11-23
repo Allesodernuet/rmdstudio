@@ -52,7 +52,7 @@ class MarkdownEditor(QTextEdit):
         self.setObjectName("Editor")
         self.setAcceptRichText(True)
         self.setAcceptDrops(True)
-        self.setPlaceholderText("Start writing. Your .Rmd file follows along.")
+        self.setPlaceholderText("Start writing. Your Markdown source follows along.")
         self.setTabChangesFocus(False)
         self.setCursorWidth(2)
         self.setWordWrapMode(self.wordWrapMode())

@@ -96,7 +96,7 @@ class ImageDialog(BaseDialog):
         self.width_spin.setSuffix(" %")
         self.width_spin.setSpecialValueText("Natural size")
         self.form.addRow("Width", self.width_spin)
-        hint = QLabel("Images are copied into an assets/ folder beside the .Rmd file.")
+        hint = QLabel("Images are copied into an assets/ folder beside the document.")
         hint.setObjectName("Hint")
         hint.setWordWrap(True)
         self._layout.addWidget(hint)
@@ -358,7 +358,7 @@ class SettingsDialog(BaseDialog):
     def __init__(self, settings: QSettings, parent: QWidget | None = None):
         super().__init__("Settings", parent, 680)
         self.settings = settings
-        self.autosave_check = QCheckBox("Autosave to the .Rmd file while typing")
+        self.autosave_check = QCheckBox("Autosave to the current document while typing")
         self.autosave_check.setChecked(settings.value("autosave", True, type=bool))
         self.delay_spin = QSpinBox()
         self.delay_spin.setRange(250, 5000)
