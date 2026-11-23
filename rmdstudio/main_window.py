@@ -1928,12 +1928,16 @@ class MainWindow(QMainWindow):
         self.mode_label.setText(MODE_LABELS[self._mode])
         self.mode_label.setToolTip(f"{MODE_LABELS[self._mode]} mode")
         if markdown:
-            self.visual_label.setText("Markdown")
+            self.visual_label.setText("Plain source")
             self.visual_label.setToolTip("Plain Markdown source; visual font styling stays in the editor")
             self.visual_label.setStyleSheet(f"color: {theme.MUTED};")
         else:
             self.visual_label.setText("HTML styling" if self._preserve_visual else "PDF-clean source")
-            self.visual_label.setToolTip("Presentational formatting is written as Pandoc HTML attributes")
+            self.visual_label.setToolTip(
+                "Presentational formatting is written as Pandoc HTML attributes"
+                if self._preserve_visual
+                else "Fonts, colours and spacing stay in the editor; source stays PDF-clean"
+            )
             self.visual_label.setStyleSheet(
                 f"color: {theme.GOLD if self._preserve_visual else theme.MUTED};"
             )
