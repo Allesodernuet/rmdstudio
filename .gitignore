@@ -10,6 +10,7 @@ test_*.txt
 roundtrip.Rmd
 release/*.exe
 release/_MEI*/
+release-*/
 staging-*/
 release/*.zip
 release/INSTALL.cmd
