@@ -63,7 +63,7 @@ gh release create v0.2.0 `
   "release/Rmd Studio Setup 0.2.0.exe" `
   "release/Rmd Studio.exe" `
   --title "Rmd Studio 0.2.0" `
-  --notes "PDF-clean R Markdown editor, work log, Knit to PDF." `
+  --notes "Quarto/R Markdown project browser, work log, standalone Render PDF." `
   --draft
 ```
 
