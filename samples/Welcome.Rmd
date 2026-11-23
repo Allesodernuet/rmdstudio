@@ -1,0 +1,47 @@
+---
+title: "The Quiet Machine"
+author: "Nicol"
+date: "2026-11-23"
+output: html_document
+---
+
+# The Quiet Machine
+
+A **word-processor front end** for R Markdown, with *italic emphasis*,
+[underlined text]{.underline}, and `inline code`. Colours and fonts survive
+as [HTML-only styling]{style="font-family: 'Georgia'; font-size: 14pt; color: #d3a35f"}.
+
+::: {style="text-align: center; line-height: 1.5"}
+A centred paragraph with generous line spacing.
+:::
+
+## Why another editor?
+
+- Write with ordinary Word-like controls.
+- Keep a clean `.Rmd` file on disk.
+- Let RStudio knit the result.
+
+1. Open a document
+2. Type
+3. Knit
+
+> Markdown is the source of truth. Formatting that HTML can carry is kept as
+> Pandoc attributes.
+
+```{r setup, echo=FALSE}
+library(ggplot2)
+```
+
+```{r plot, fig.width=6, fig.height=4}
+ggplot(mtcars, aes(wt, mpg)) +
+  geom_point()
+```
+
+| Statistic | Value |
+|:---|---:|
+| Mean | 20.1 |
+| Median | 19.2 |
+
+---
+
+That is the loop: write here, save there, knit anywhere.
