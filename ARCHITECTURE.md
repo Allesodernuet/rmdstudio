@@ -283,11 +283,11 @@ column of the table; the HTML style layer is opt-in.
 
 ### Inno Setup path quirk
 
-The Inno Setup 6.7.3 installer fails to launch from this workspace's `züg`
-folder, which contains a non-ASCII character. The installed app itself runs
-fine from a Unicode path, and the installer works when copied to an ASCII
-folder. `INSTALL.cmd` stages the setup file in `%TEMP%` before launching it and
-is the recommended entry point when the release folder path is not ASCII.
+Some Inno Setup 6.7.3 builds fail to launch the setup executable from a release
+folder whose path contains non-ASCII characters. The installed app itself runs
+fine from a Unicode path, and the installer works when copied to an ASCII folder.
+`INSTALL.cmd` stages the setup file in `%TEMP%` before launching it and is the
+recommended entry point when the release folder path is not ASCII.
 
 ### Signing
 
@@ -313,8 +313,8 @@ No runtime plugin is required. The recommended development additions are:
 - **PyInstaller 6.22** and **Pillow** for the exe and icon.
 - **pytest** for the converter/sync/UI tests.
 - **R** for code chunks and rmarkdown files.
-- **Quarto CLI** for `.qmd`. It is installed standalone here and can also be
-  discovered inside an existing RStudio installation.
+- **Quarto CLI** for `.qmd`. A standalone installation is recommended; the app
+  can also discover the copy bundled with RStudio.
 - **Pandoc** for import and HTML previews. It can come from Quarto, RStudio or a
   standalone install.
 - **RStudio** is optional and no longer exposed in the UI; it is only one
