@@ -1,6 +1,6 @@
 ---
 title: "The Quiet Machine"
-author: "Nicol"
+author: "Example Author"
 date: "2026-11-23"
 output: pdf_document
 ---
@@ -15,7 +15,7 @@ plain and PDF-clean.
 
 - Write with ordinary Word-like controls.
 - Keep a clean `.Rmd` file on disk.
-- Let RStudio knit the result.
+- Render a PDF when ready.
 
 1. Open a document
 2. Type

@@ -6,9 +6,10 @@ build/
 dist/
 userdata/
 runtime-temp/
-test_*_result.txt
+test_*.txt
 roundtrip.Rmd
 release/*.exe
+release/_MEI*/
 release/*.zip
 release/INSTALL.cmd
 release/*.log

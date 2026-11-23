@@ -22,7 +22,7 @@ it.
 summary(cars)
 ```
 
-> The PDF comes from Quarto and LaTeX, not from RStudio's editor.
+> The PDF is rendered by Quarto and LaTeX.
 
 ## Next section
 

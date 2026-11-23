@@ -328,8 +328,8 @@ No runtime plugin is required. The recommended development additions are:
   Python parser; `pyenchant` or the Windows Spell Checking API for spell check;
   PySide6-Addons/QtWebEngine only if we want an embedded rendered preview.
 
-I would **not** add a Node/Electron runtime, a cloud service, or a database for
-this version. They do not solve the Markdown mapping problem and make packaging
+This version intentionally does not add a Node/Electron runtime, a cloud service,
+or a database. They do not solve the Markdown mapping problem and make packaging
 worse.
 
 ## Roadmap

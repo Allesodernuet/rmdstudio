@@ -1,6 +1,7 @@
 ; Inno Setup script for Rmd Studio.
-; Build with: "C:\Users\<you>\AppData\Local\Programs\Inno Setup 6\ISCC.exe" installer\RmdStudio.iss
-; The installer is unsigned until a trusted code-signing certificate is configured.
+; Build with the Inno Setup 6 command-line compiler:
+;   ISCC.exe installer\RmdStudio.iss
+; The installer is unsigned until a code-signing certificate is configured.
 
 #define MyAppName "Rmd Studio"
 #define MyAppVersion "0.3.0"

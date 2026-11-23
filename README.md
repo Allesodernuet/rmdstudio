@@ -115,8 +115,8 @@ you designate:
 - `.log` / `.txt` files get `[2026-11-23 14:30:05] ...` entries.
 - Entries are appended, not rewritten, so the log behaves like a journal.
 
-If your build expects a specific log filename or schema, choose that file in the
-panel. If it expects a particular format, tell me the format and I can match it.
+A `.md` destination produces Markdown bullets; `.log` and `.txt` destinations
+use plain timestamped lines. Any other extension uses the plain format.
 
 ## AI chat and AI usage log
 
@@ -180,8 +180,7 @@ The app detects these; nothing needs to be opened manually:
 - **LaTeX** for PDF output (TinyTeX can be installed from the Render PDF
   prompt; MiKTeX/TeX Live also work).
 
-RStudio can be uninstalled once standalone Quarto/Pandoc are available. The app
-no longer has an “Open in RStudio” button.
+RStudio is optional. Install standalone Quarto and Pandoc if it is not present.
 
 ## Importing existing documents
 
@@ -257,38 +256,8 @@ This runs PyInstaller with `RmdStudio.spec`, copies the result to
 `release\Rmd Studio.exe`, compiles `installer\RmdStudio.iss` with Inno Setup if
 installed, and writes `release\INSTALL.cmd`.
 
-The installed Inno Setup 6.7.3 compiler reports **non-commercial use only**; buy
-its commercial license if you distribute this commercially. Personal/academic
-use is within its non-commercial terms.
-
-See `RELEASE.md` for Inno Setup/GitHub CLI usage and `SIGNING.md` for the
-certificate decision and signing steps.
-
-### Code signing
-
-`tools/sign.ps1` signs an exe with an Authenticode certificate from the current
-user's certificate store. To sign the app and installer during a build:
-
-```powershell
-$env:RMD_SIGN_THUMBPRINT = "YOUR_CERTIFICATE_THUMBPRINT"
-.\.venv\python build.py
-```
-
-The build signs `release\Rmd Studio.exe` before compiling the installer and then
-signs the installer. Timestamping uses DigiCert's public timestamp service.
-
-A trusted certificate is **not included**. Obtaining one requires identity
-verification and usually payment:
-
-- **OV code-signing certificate** — cheaper, validates the publisher, builds
-  SmartScreen reputation over time. Usually a `.pfx` or hardware token.
-- **EV code-signing certificate** — hardware token/HSM, strongest immediate
-  SmartScreen reputation, more expensive.
-- **Azure Trusted Signing** — cloud signing with an Azure subscription and
-  identity validation; no hardware token, but requires an Azure setup and a
-  different signing command/tool.
-- **Self-signed certificate** — useful for testing the signing pipeline only;
-  Windows treats it as untrusted.
+Development setup, tests, installer details and optional code signing are
+documented in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Built with Qt/PySide6 (LGPL-3.0); PyInstaller bundles the Qt libraries needed at
 runtime. The app has no telemetry and makes no network calls except when you
@@ -309,7 +278,6 @@ message. Quarto/Pandoc/Rscript are invoked only for explicit actions.
   viewer; currently the preview opens in the default browser.
 - Word-like page pagination/printing is not simulated; Quarto/R Markdown is the
   print source of truth.
-- The code-signing certificate must still be purchased/issued; the installer is
-  unsigned until then.
+- Release binaries are unsigned; Windows SmartScreen may warn.
 - If RStudio is removed, keep or install standalone Quarto, Pandoc, R and LaTeX;
   they are required for Quarto files, previews and PDF output.
