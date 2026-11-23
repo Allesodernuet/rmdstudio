@@ -80,6 +80,28 @@ def find_rscript(override: str = "") -> str | None:
     return result
 
 
+def find_quarto(override: str = "") -> str | None:
+    if override and Path(override).is_file():
+        return override
+    cached = _cache.get("quarto")
+    if cached:
+        return cached
+    program_files = Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
+    local_app = Path(os.environ.get("LOCALAPPDATA", ""))
+    candidates: list[str | Path] = [
+        _which("quarto", "quarto.exe"),
+        program_files / "RStudio" / "resources" / "app" / "bin" / "quarto" / "bin" / "quarto.exe",
+        local_app / "Programs" / "Quarto" / "bin" / "quarto.exe",
+        program_files / "Quarto" / "bin" / "quarto.exe",
+        local_app / "RStudio" / "resources" / "app" / "bin" / "quarto" / "bin" / "quarto.exe",
+    ]
+    result = _first_existing(candidates)
+    if result and result.lower().endswith(".cmd"):
+        result = None
+    _cache["quarto"] = result
+    return result
+
+
 def find_pdflatex(override: str = "") -> str | None:
     if override and Path(override).is_file():
         return override
@@ -121,6 +143,8 @@ def find_pandoc(override: str = "") -> str | None:
         program_files / "RStudio" / "resources" / "app" / "bin" / "quarto" / "bin" / "tools" / "pandoc.exe",
         program_files / "RStudio" / "resources" / "app" / "bin" / "pandoc" / "pandoc.exe",
         program_files / "RStudio" / "resources" / "app" / "bin" / "quarto" / "bin" / "pandoc.exe",
+        local_app / "Programs" / "Quarto" / "bin" / "tools" / "pandoc.exe",
+        program_files / "Quarto" / "bin" / "tools" / "pandoc.exe",
         local_app / "Pandoc" / "pandoc.exe",
         program_files / "Pandoc" / "pandoc.exe",
     ]
@@ -288,5 +312,6 @@ def self_check() -> dict[str, str | None]:
         "rscript": find_rscript(),
         "pandoc": find_pandoc(),
         "pdflatex": find_pdflatex(),
+        "quarto": find_quarto(),
         "python": sys.executable,
     }

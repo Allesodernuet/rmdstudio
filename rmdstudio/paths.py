@@ -93,6 +93,64 @@ def tinytex_dir() -> Path:
     return app_data_dir() / "TinyTeX"
 
 
+def short_path(path: Path) -> Path | None:
+    """Return the Windows 8.3 path when it is ASCII (Quarto's Lua filter
+    sometimes mishandles non-ASCII project paths)."""
+    if os.name != "nt":
+        return None
+    try:
+        import ctypes
+
+        buffer = ctypes.create_unicode_buffer(32768)
+        length = ctypes.windll.kernel32.GetShortPathNameW(str(path), buffer, len(buffer))
+        if length:
+            candidate = Path(buffer.value)
+            try:
+                str(candidate).encode("ascii")
+                return candidate
+            except UnicodeEncodeError:
+                return None
+    except Exception:
+        return None
+    return None
+
+
+def quarto_cache_root() -> Path:
+    """A writable LOCALAPPDATA for Quarto's code-page and render caches."""
+    local = os.environ.get("LOCALAPPDATA")
+    if local:
+        folder = Path(local)
+        if _can_write(folder / "quarto"):
+            return folder
+    fallback = app_data_dir() / "quarto-local"
+    fallback.mkdir(parents=True, exist_ok=True)
+    return fallback
+
+
+def runtime_temp_dir() -> Path:
+    folder = app_data_dir() / "rtemp"
+    folder.mkdir(parents=True, exist_ok=True)
+    return short_path(folder) or folder
+
+
+def texmf_cache_dir() -> Path:
+    folder = app_data_dir() / "texmf-cache"
+    folder.mkdir(parents=True, exist_ok=True)
+    return short_path(folder) or folder
+
+
+def r_user_library() -> Path | None:
+    local = os.environ.get("LOCALAPPDATA")
+    if not local:
+        return None
+    root = Path(local) / "R" / "win-library"
+    try:
+        versions = sorted((p for p in root.iterdir() if p.is_dir()), key=lambda p: p.name, reverse=True)
+    except OSError:
+        return None
+    return versions[0] if versions else None
+
+
 def resource_path(relative: str) -> Path:
     if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
         return Path(sys._MEIPASS) / relative
@@ -110,6 +168,18 @@ def sample_path() -> Path | None:
         return target
     except OSError:
         return source
+
+
+def quarto_sample_path() -> Path | None:
+    source = resource_path("samples/quarto-template")
+    if not source.is_dir():
+        return None
+    target = app_data_dir() / "Quarto Template"
+    try:
+        shutil.copytree(source, target, dirs_exist_ok=True)
+    except OSError:
+        return source / "template.qmd"
+    return target / "template.qmd"
 
 
 def copy_to_assets(source: Path, document_path: Path) -> str:

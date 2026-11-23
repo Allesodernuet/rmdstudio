@@ -1,0 +1,29 @@
+---
+title: "Quarto Template"
+author: "Your Name"
+date: "2026-11-23"
+format: pdf
+---
+
+# Introduction
+
+This is a Quarto template opened directly in Rmd Studio. The project tree on
+the right shows the whole folder; double-click another `.qmd` file to switch to
+it.
+
+## What this demonstrates
+
+- Quarto front matter (`format: pdf`)
+- Rich text translated to clean Markdown
+- R code chunks in a Quarto document
+- Switching documents from the Files panel
+
+```{r}
+summary(cars)
+```
+
+> The PDF comes from Quarto and LaTeX, not from RStudio's editor.
+
+## Next section
+
+Replace this text, add sections, and use **Render PDF**.

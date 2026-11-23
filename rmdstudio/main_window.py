@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import html
+import os
 import re
 import shutil
+import time
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QProcess, QProcessEnvironment, QSettings, QSize, Qt, QTimer, QUrl
+from PySide6.QtCore import QDir, QModelIndex, QProcess, QProcessEnvironment, QSettings, QSize, Qt, QTimer, QUrl
 from PySide6.QtGui import (
     QAction,
     QActionGroup,
@@ -28,6 +30,7 @@ from PySide6.QtWidgets import (
     QColorDialog,
     QComboBox,
     QFileDialog,
+    QFileSystemModel,
     QFontComboBox,
     QFrame,
     QGraphicsDropShadowEffect,
@@ -47,6 +50,7 @@ from PySide6.QtWidgets import (
     QTextBrowser,
     QToolBar,
     QToolButton,
+    QTreeView,
     QVBoxLayout,
     QWidget,
 )
@@ -90,6 +94,8 @@ class MainWindow(QMainWindow):
         self.settings = QSettings(str(paths.settings_path()), QSettings.Format.IniFormat)
         self.defaults = Defaults()
         self.path: Path | None = None
+        self.project_root: Path | None = None
+        self._is_quarto = False
         self._loading = False
         self._generation = 0
         self._saved_generation = 0
@@ -102,6 +108,7 @@ class MainWindow(QMainWindow):
         self._knit_progress: QProgressDialog | None = None
         self._knit_output: Path | None = None
         self._knit_canceled = False
+        self._knit_started_at = 0.0
         self._latex_process: QProcess | None = None
         self._latex_progress: QProgressDialog | None = None
         self._latex_canceled = False
@@ -153,6 +160,10 @@ class MainWindow(QMainWindow):
         self._restore_geometry()
 
         self._new_document(first=True)
+        saved_root = self.settings.value("project_root", "", type=str) or ""
+        if saved_root and Path(saved_root).is_dir():
+            self._set_project_root(Path(saved_root), persist=False)
+        self.side_tabs.setCurrentIndex(0)
         self.editor.setFocus()
 
     # ------------------------------------------------------------------
@@ -184,11 +195,13 @@ class MainWindow(QMainWindow):
         return action
 
     def _build_actions(self) -> None:
-        self.action_new = self._action("New", "new", "Ctrl+N", self.new_document)
-        self.action_open = self._action("Open...", "open", "Ctrl+O", self.open_dialog)
+        self.action_new = self._action("New R Markdown document", "new", "Ctrl+N", self.new_document)
+        self.action_new_quarto = self._action("New Quarto document", "new", "Ctrl+Alt+Q", self.new_quarto_document)
+        self.action_open = self._action("Open document...", "open", "Ctrl+O", self.open_dialog)
+        self.action_open_quarto = self._action("Open Quarto template...", "open", None, self.open_quarto_dialog)
+        self.action_open_folder = self._action("Open project folder...", "open", "Ctrl+Shift+O", self.open_folder_dialog)
         self.action_save = self._action("Save", "save", "Ctrl+S", self._save_document)
         self.action_save_as = self._action("Save as...", "save_as", "Ctrl+Shift+S", self.save_as)
-        self.action_open_rstudio = self._action("Open in RStudio", "rstudio", "Ctrl+Alt+O", self.open_in_rstudio)
         self.action_knit = self._action("Knit to PDF", "knit", "Ctrl+Alt+K", self.knit)
         self.action_browser_preview = self._action("Rendered preview in browser", "external", None, self.preview_in_browser)
         self.action_settings = self._action("Settings...", "settings", "Ctrl+,", self.open_settings)
@@ -265,18 +278,23 @@ class MainWindow(QMainWindow):
         self.action_about = self._action("About Rmd Studio", "info", None, self.show_about)
         self.action_guide = self._action("Quick guide", "info", "F1", self.show_guide)
         self.action_sample = self._action("Open welcome sample", "new", None, self.open_demo)
+        self.action_quarto_sample = self._action("Open Quarto sample project", "new", None, self.open_quarto_demo)
 
     def _build_menus(self) -> None:
         bar = self.menuBar()
         file_menu = bar.addMenu("&File")
         file_menu.addAction(self.action_new)
+        file_menu.addAction(self.action_new_quarto)
+        file_menu.addSeparator()
         file_menu.addAction(self.action_open)
+        file_menu.addAction(self.action_open_quarto)
+        file_menu.addAction(self.action_open_folder)
         self.recent_menu = file_menu.addMenu("Open recent")
         self._rebuild_recent_menu()
+        file_menu.addSeparator()
         file_menu.addAction(self.action_save)
         file_menu.addAction(self.action_save_as)
         file_menu.addSeparator()
-        file_menu.addAction(self.action_open_rstudio)
         file_menu.addAction(self.action_knit)
         file_menu.addAction(self.action_browser_preview)
         file_menu.addSeparator()
@@ -356,6 +374,7 @@ class MainWindow(QMainWindow):
 
         help_menu = bar.addMenu("&Help")
         help_menu.addAction(self.action_sample)
+        help_menu.addAction(self.action_quarto_sample)
         help_menu.addSeparator()
         help_menu.addAction(self.action_guide)
         help_menu.addAction(self.action_about)
@@ -428,10 +447,10 @@ class MainWindow(QMainWindow):
         spacer = QWidget(top)
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         top.addWidget(spacer)
-        rstudio_button = QToolButton(top)
-        rstudio_button.setDefaultAction(self.action_open_rstudio)
-        rstudio_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        top.addWidget(rstudio_button)
+        folder_button = QToolButton(top)
+        folder_button.setDefaultAction(self.action_open_folder)
+        folder_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        top.addWidget(folder_button)
         knit_button = QToolButton(top)
         knit_button.setDefaultAction(self.action_knit)
         knit_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
@@ -542,6 +561,7 @@ class MainWindow(QMainWindow):
         side_layout.addLayout(side_header)
         self.side_tabs = QTabWidget(self.preview_panel)
         self.side_tabs.setObjectName("WorkspaceTabs")
+        self.side_tabs.addTab(self._build_files_tab(), "Files")
         self.side_tabs.addTab(self._build_log_tab(), "Work log")
         self.side_tabs.addTab(self._build_preview_tab(), "Preview")
         side_layout.addWidget(self.side_tabs, 1)
@@ -556,6 +576,137 @@ class MainWindow(QMainWindow):
         self.side_tabs.currentChanged.connect(self._side_tab_changed)
         outer.addWidget(self.splitter, 1)
         self.setCentralWidget(central)
+
+    def _build_files_tab(self) -> QWidget:
+        page = QWidget(self.preview_panel)
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(7)
+        header = QHBoxLayout()
+        self.project_label = QLabel("No project folder open")
+        self.project_label.setObjectName("Hint")
+        self.project_label.setWordWrap(True)
+        header.addWidget(self.project_label, 1)
+        open_button = QToolButton(page)
+        open_button.setIcon(icons.icon("open"))
+        open_button.setToolTip("Open a project folder (Ctrl+Shift+O)")
+        open_button.clicked.connect(self.open_folder_dialog)
+        header.addWidget(open_button)
+        refresh_button = QToolButton(page)
+        refresh_button.setIcon(icons.icon("undo"))
+        refresh_button.setToolTip("Refresh the folder tree")
+        refresh_button.clicked.connect(self._refresh_file_tree)
+        header.addWidget(refresh_button)
+        layout.addLayout(header)
+        self.file_tree = QTreeView(page)
+        self.file_tree.setObjectName("FileTree")
+        self.file_tree.setHeaderHidden(True)
+        self.file_tree.setRootIsDecorated(True)
+        self.file_tree.setUniformRowHeights(True)
+        self.file_tree.setAnimated(True)
+        self.file_tree.setSortingEnabled(True)
+        self.file_tree.sortByColumn(0, Qt.SortOrder.AscendingOrder)
+        self.file_tree.setIndentation(14)
+        self.file_model = QFileSystemModel(self)
+        self.file_model.setFilter(QDir.Filter.AllEntries | QDir.Filter.NoDotAndDotDot)
+        self.file_model.setRootPath("")
+        self.file_tree.setModel(self.file_model)
+        for column in range(1, 4):
+            self.file_tree.hideColumn(column)
+        self.file_tree.activated.connect(self._tree_activated)
+        layout.addWidget(self.file_tree, 1)
+        hint = QLabel("Double-click a .qmd, .Rmd or .md file to open it.")
+        hint.setObjectName("Hint")
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
+        return page
+
+    def _detect_project_root(self, document: Path) -> Path:
+        current = document.parent
+        for _ in range(6):
+            try:
+                if any((current / marker).exists() for marker in ("_quarto.yml", "_quarto.yaml", ".git")):
+                    return current
+                if any(current.glob("*.Rproj")):
+                    return current
+            except OSError:
+                pass
+            if current.parent == current:
+                break
+            current = current.parent
+        return document.parent
+
+    def _set_project_root(self, folder: Path | None, persist: bool = True) -> None:
+        if folder is None or not folder.is_dir():
+            return
+        folder = folder.resolve()
+        self.project_root = folder
+        self.project_label.setText(folder.name)
+        self.project_label.setToolTip(str(folder))
+        root_index = self.file_model.setRootPath(str(folder))
+        self.file_tree.setRootIndex(root_index)
+        if persist:
+            self.settings.setValue("project_root", str(folder))
+            self.settings.sync()
+        self._select_current_in_files()
+        QTimer.singleShot(180, self._select_current_in_files)
+
+    def _refresh_file_tree(self) -> None:
+        if self.project_root is not None:
+            self.file_model.setRootPath("")
+            root_index = self.file_model.setRootPath(str(self.project_root))
+            self.file_tree.setRootIndex(root_index)
+            self._select_current_in_files()
+
+    def _select_current_in_files(self) -> None:
+        if self.path is None or self.project_root is None:
+            return
+        try:
+            if not self.path.resolve().is_relative_to(self.project_root):
+                return
+            index = self.file_model.index(str(self.path))
+            if not index.isValid():
+                return
+            parent = index.parent()
+            while parent.isValid() and parent != self.file_tree.rootIndex():
+                self.file_tree.expand(parent)
+                parent = parent.parent()
+            self.file_tree.setCurrentIndex(index)
+            self.file_tree.scrollTo(index)
+        except (OSError, ValueError):
+            pass
+
+    def _tree_activated(self, index: QModelIndex) -> None:
+        path = Path(self.file_model.filePath(index))
+        if path.is_dir():
+            return
+        suffix = path.suffix.lower()
+        if suffix in (".qmd", ".rmd", ".md"):
+            self.open_path(path)
+        elif suffix in (".pdf", ".png", ".jpg", ".jpeg", ".gif", ".webp"):
+            external.open_path(path)
+        else:
+            self.statusBar().showMessage(
+                "The editor opens .qmd, .Rmd and .md files. Other files can stay in the tree for reference.",
+                5000,
+            )
+
+    def open_folder_dialog(self) -> None:
+        start = str(self.project_root or (self.path.parent if self.path else Path.home()))
+        folder = QFileDialog.getExistingDirectory(self, "Open project folder", start)
+        if folder:
+            self._set_project_root(Path(folder))
+            self.side_tabs.setCurrentIndex(0)
+            self.statusBar().showMessage(f"Project folder: {folder}", 3500)
+
+    def open_quarto_dialog(self) -> None:
+        start = self.path.parent if self.path else (self.project_root or Path.home() / "Documents")
+        filename, _ = QFileDialog.getOpenFileName(
+            self, "Open Quarto template", str(start),
+            "Quarto documents (*.qmd);;All files (*)"
+        )
+        if filename:
+            self.open_path(Path(filename))
 
     def _build_preview_tab(self) -> QWidget:
         page = QWidget(self.preview_panel)
@@ -643,7 +794,7 @@ class MainWindow(QMainWindow):
         return page
 
     def _side_tab_changed(self, index: int) -> None:
-        if index == 1:
+        if index == 2:
             self._refresh_preview()
             self._render_timer.start(0)
         else:
@@ -1217,19 +1368,22 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     # Document lifecycle
     # ------------------------------------------------------------------
-    def _default_yaml(self, title: str = "Untitled") -> str:
+    def _default_yaml(self, title: str = "Untitled", quarto: bool = False) -> str:
         safe = title.replace('"', '\\"')
+        if quarto:
+            return f'title: "{safe}"\nformat: pdf'
         return f'title: "{safe}"\noutput: pdf_document'
 
-    def _new_document(self, first: bool = False) -> None:
+    def _new_document(self, first: bool = False, quarto: bool = False) -> None:
         if not first and not self._maybe_save_changes():
             return
+        self._is_quarto = quarto
         self._loading = True
         try:
             self.path = None
             self.editor.set_base_path(None)
             self.editor.reset_document()
-            self.front_edit.setPlainText(self._default_yaml())
+            self.front_edit.setPlainText(self._default_yaml(quarto=quarto))
             self._generation = 0
             self._saved_generation = 0
             self._force_next_save = False
@@ -1247,26 +1401,33 @@ class MainWindow(QMainWindow):
         self._update_word_count()
         self._update_sync_label()
         self._update_log_path()
+        self._update_render_action()
+        self._select_current_in_files()
         self._refresh_preview()
         self.editor.setFocus()
-        self.statusBar().showMessage("New document", 1800)
+        self.statusBar().showMessage("New Quarto document" if quarto else "New R Markdown document", 1800)
 
     def new_document(self) -> None:
         self._new_document()
 
+    def new_quarto_document(self) -> None:
+        self._new_document(quarto=True)
+
     def open_dialog(self) -> None:
-        if not self._maybe_save_changes():
-            return
         start = self.path.parent if self.path else Path.home() / "Documents"
         filename, _ = QFileDialog.getOpenFileName(
-            self, "Open R Markdown", str(start),
-            "R Markdown (*.Rmd *.rmd *.qmd *.md);;All files (*)"
+            self, "Open document", str(start),
+            "Quarto / R Markdown (*.qmd *.Rmd *.rmd *.md);;Quarto (*.qmd);;R Markdown (*.Rmd *.rmd);;All files (*)"
         )
         if filename:
             self.open_path(Path(filename))
 
-    def open_path(self, path: Path, silent: bool = False) -> bool:
+    def open_path(self, path: Path, silent: bool = False, check_save: bool = True) -> bool:
         path = Path(path)
+        if self.path is not None and path.resolve() == self.path.resolve():
+            return True
+        if check_save and not self._maybe_save_changes():
+            return False
         if not path.is_file():
             if not silent:
                 QMessageBox.warning(self, "Open file", f"The file does not exist:\n{path}")
@@ -1288,6 +1449,7 @@ class MainWindow(QMainWindow):
         try:
             self._autosave_timer.stop()
             self.path = path
+            self._is_quarto = bool(path is not None and path.suffix.lower() == ".qmd")
             self.editor.set_base_path(path.parent if path else None)
             yaml_text, result = import_rmd(
                 self.editor.document(), text, self.defaults,
@@ -1315,6 +1477,15 @@ class MainWindow(QMainWindow):
         self._update_word_count()
         self._update_sync_label()
         self._update_log_path()
+        self._update_render_action()
+        if path is not None:
+            try:
+                inside = self.project_root is not None and path.resolve().is_relative_to(self.project_root)
+            except (OSError, ValueError):
+                inside = False
+            if not inside:
+                self._set_project_root(self._detect_project_root(path))
+            self._select_current_in_files()
         self._refresh_preview()
         self._sync_toolbar()
         self.editor.setFocus()
@@ -1323,7 +1494,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(
                 self, "Pandoc not found",
                 "Pandoc was not found, so this file is shown as raw Markdown blocks. "
-                "Install RStudio/Pandoc or set the Pandoc path in Settings (Ctrl+,) for visual editing."
+                "Install Pandoc or set the Pandoc path in Settings (Ctrl+,) for visual editing."
             )
 
     def _maybe_save_changes(self) -> bool:
@@ -1333,7 +1504,7 @@ class MainWindow(QMainWindow):
         box.setWindowTitle("Unsaved changes")
         box.setIcon(QMessageBox.Icon.Question)
         box.setText("Save changes to this document?")
-        box.setInformativeText("If you close without saving, the generated .Rmd file will not be updated.")
+        box.setInformativeText("If you close without saving, the generated document file will not be updated.")
         box.setStandardButtons(QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel)
         box.setDefaultButton(QMessageBox.StandardButton.Save)
         choice = box.exec()
@@ -1426,25 +1597,41 @@ class MainWindow(QMainWindow):
 
     def save_as(self) -> bool:
         start_dir = self.path.parent if self.path else Path.home() / "Documents"
-        suggested = self.path.name if self.path else "Untitled.Rmd"
+        default_suffix = ".qmd" if self._is_quarto else ".Rmd"
+        suggested = self.path.name if self.path else f"Untitled{default_suffix}"
+        filters = (
+            "Quarto (*.qmd);;R Markdown (*.Rmd *.rmd);;Markdown (*.md);;All files (*)"
+            if self._is_quarto
+            else "R Markdown (*.Rmd *.rmd);;Quarto (*.qmd);;Markdown (*.md);;All files (*)"
+        )
         filename, _ = QFileDialog.getSaveFileName(
-            self, "Save R Markdown", str(start_dir / suggested),
-            "R Markdown (*.Rmd *.rmd);;Markdown (*.md);;Quarto (*.qmd);;All files (*)"
+            self, "Save document", str(start_dir / suggested), filters
         )
         if not filename:
             return False
         path = Path(filename)
         if not path.suffix:
-            path = path.with_suffix(".Rmd")
+            path = path.with_suffix(default_suffix)
         old_path = self.path
         if old_path is not None and old_path.parent.resolve() != path.parent.resolve():
             self._copy_assets(old_path, path)
         self.path = path
+        self._is_quarto = path.suffix.lower() == ".qmd"
         self.editor.set_base_path(path.parent)
         yaml = self.front_edit.toPlainText()
+        changed_yaml = False
         if re.search(r'^title:\s*"?Untitled"?\s*$', yaml, re.MULTILINE):
             title = path.stem.replace("_", " ")
             yaml = re.sub(r'^title:\s*"?Untitled"?\s*$', f'title: "{title}"', yaml, count=1, flags=re.MULTILINE)
+            changed_yaml = True
+        if self._is_quarto and "format:" not in yaml:
+            if "output: pdf_document" in yaml:
+                yaml = yaml.replace("output: pdf_document", "format: pdf")
+                changed_yaml = True
+        elif not self._is_quarto and "format:" in yaml and "output:" not in yaml:
+            yaml = yaml.replace("format: pdf", "output: pdf_document")
+            changed_yaml = True
+        if changed_yaml:
             self.front_edit.blockSignals(True)
             self.front_edit.setPlainText(yaml)
             self.front_edit.blockSignals(False)
@@ -1455,6 +1642,14 @@ class MainWindow(QMainWindow):
             self._add_recent(path)
             self._update_file_label()
             self._update_log_path()
+            self._update_render_action()
+            try:
+                inside = self.project_root is not None and path.resolve().is_relative_to(self.project_root)
+            except (OSError, ValueError):
+                inside = False
+            if not inside:
+                self._set_project_root(self._detect_project_root(path))
+            self._select_current_in_files()
         return accepted
 
     def _copy_assets(self, old_path: Path, new_path: Path) -> None:
@@ -1519,12 +1714,16 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     # UI state
     # ------------------------------------------------------------------
+    def _update_render_action(self) -> None:
+        self.action_knit.setText("Render PDF" if self._is_quarto else "Knit to PDF")
+
     def _update_title(self) -> None:
-        name = self.path.name if self.path else "Untitled"
+        name = self.path.name if self.path else ("Untitled.qmd" if self._is_quarto else "Untitled")
         marker = " •" if self.dirty else ""
         self.setWindowTitle(f"{name}{marker} — {APP_NAME}")
         self.doc_title_label.setText(f"{name}{marker}")
         self.doc_title_label.setToolTip(str(self.path) if self.path else "Not saved yet")
+        self._update_render_action()
 
     def _update_file_label(self) -> None:
         if self.path is None:
@@ -1588,11 +1787,11 @@ class MainWindow(QMainWindow):
             self.preview_warning.hide()
         if self.dirty:
             self._update_sync_label()
-        if self.preview_panel.isVisible() and self.side_tabs.currentIndex() == 1:
+        if self.preview_panel.isVisible() and self.side_tabs.currentIndex() == 2:
             self._render_timer.start()
 
     def _refresh_rendered(self) -> None:
-        if not self.preview_panel.isVisible() or self.side_tabs.currentIndex() != 1:
+        if not self.preview_panel.isVisible() or self.side_tabs.currentIndex() != 2:
             return
         result = self._last_result
         if result is None:
@@ -1629,7 +1828,7 @@ class MainWindow(QMainWindow):
         if checked:
             self._refresh_preview()
             self._update_log_path()
-            if self.side_tabs.currentIndex() == 1:
+            if self.side_tabs.currentIndex() == 2:
                 self._render_timer.start(0)
             width = max(380, min(470, int(self.width() * 0.36)))
             total = max(800, self.splitter.width())
@@ -1715,7 +1914,7 @@ class MainWindow(QMainWindow):
         box = QMessageBox(self)
         box.setWindowTitle("File changed on disk")
         box.setIcon(QMessageBox.Icon.Warning)
-        box.setText("This file changed in RStudio or another editor while you had unsaved changes.")
+        box.setText("This file changed in another editor or process while you had unsaved changes.")
         box.setInformativeText("How should the conflict be resolved?")
         reload_button = box.addButton("Reload from disk", QMessageBox.ButtonRole.DestructiveRole)
         keep_button = box.addButton("Keep my version", QMessageBox.ButtonRole.AcceptRole)
@@ -1759,36 +1958,17 @@ class MainWindow(QMainWindow):
             self._update_log_path()
 
     # ------------------------------------------------------------------
-    # RStudio and preview
+    # Render and preview
     # ------------------------------------------------------------------
     def _ensure_saved(self) -> bool:
         if self.path is None:
             return self.save_as()
         return True
 
-    def open_in_rstudio(self) -> None:
-        if not self._save_document():
-            return
-        if self.path is None:
-            return
-        override = self.settings.value("rstudio_path", "", type=str) or ""
-        if external.open_in_rstudio(self.path, override):
-            self.statusBar().showMessage("Opening in RStudio...", 2600)
-        else:
-            QMessageBox.warning(
-                self, "RStudio not found",
-                "RStudio could not be found. Set the RStudio path in Settings (Ctrl+,) "
-                "or open the .Rmd file from RStudio manually."
-            )
-
     def knit(self) -> None:
         if not self._save_document():
             return
         if self.path is None:
-            return
-        rscript = external.find_rscript(self.settings.value("rscript_path", "", type=str) or "")
-        if not rscript:
-            QMessageBox.warning(self, "Rscript not found", "Set the Rscript path in Settings (Ctrl+,).")
             return
         latex_path = self.settings.value("pdflatex_path", "", type=str) or ""
         latex = external.find_pdflatex(latex_path)
@@ -1796,6 +1976,13 @@ class MainWindow(QMainWindow):
             self._offer_latex_install()
             return
         if self._knit_process is not None:
+            return
+        if self._is_quarto:
+            self._render_quarto(latex)
+            return
+        rscript = external.find_rscript(self.settings.value("rscript_path", "", type=str) or "")
+        if not rscript:
+            QMessageBox.warning(self, "Rscript not found", "Set the Rscript path in Settings (Ctrl+,).")
             return
         posix = self.path.as_posix().replace("'", "\\'")
         yaml = self.front_edit.toPlainText()
@@ -1808,6 +1995,7 @@ class MainWindow(QMainWindow):
             )
         self._knit_output = self.path.with_suffix(".pdf")
         self._knit_canceled = False
+        self._knit_started_at = time.time()
         process = QProcess(self)
         process.setProgram(rscript)
         process.setArguments(["-e", expression])
@@ -1832,6 +2020,71 @@ class MainWindow(QMainWindow):
         self._knit_process = process
         progress = QProgressDialog("Knitting the R Markdown document to PDF...", "Cancel", 0, 0, self)
         progress.setWindowTitle("Knit to PDF")
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.canceled.connect(self._cancel_knit)
+        self._knit_progress = progress
+        progress.show()
+        process.start()
+
+    def _render_quarto(self, latex: str) -> None:
+        quarto = external.find_quarto(self.settings.value("quarto_path", "", type=str) or "")
+        if not quarto:
+            QMessageBox.warning(
+                self, "Quarto CLI not found",
+                "Quarto is needed to render .qmd files. It is bundled with RStudio, "
+                "or can be installed from quarto.org. Set the Quarto path in Settings. "
+                "You do not need to open RStudio to use it."
+            )
+            return
+        self._knit_output = self.path.with_suffix(".pdf")
+        self._knit_canceled = False
+        self._knit_started_at = time.time()
+        process = QProcess(self)
+        process.setProgram(quarto)
+        render_path = paths.short_path(self.path) or self.path
+        workdir = self.project_root if self.project_root is not None else self.path.parent
+        workdir = paths.short_path(workdir) or workdir
+        process.setArguments(["render", str(render_path), "--to", "pdf"])
+        process.setWorkingDirectory(str(workdir))
+        env = QProcessEnvironment.systemEnvironment()
+        rscript = external.find_rscript(self.settings.value("rscript_path", "", type=str) or "")
+        if rscript:
+            env.insert("PATH", str(Path(rscript).parent) + ";" + env.value("PATH"))
+        env.insert("PATH", str(Path(latex).parent) + ";" + env.value("PATH"))
+        pandoc = external.find_pandoc(self.settings.value("pandoc_path", "", type=str) or "")
+        if pandoc:
+            env.insert("RSTUDIO_PANDOC", str(Path(pandoc).parent))
+        try:
+            cache_root = paths.quarto_cache_root()
+            codepage_cache = cache_root / "quarto"
+            codepage_cache.mkdir(parents=True, exist_ok=True)
+            try:
+                (codepage_cache / "codepage").write_text("65001", encoding="ascii")
+            except OSError:
+                pass
+            env.insert("LOCALAPPDATA", str(cache_root))
+            env.insert("QUARTO_WIN_CODEPAGE", "65001")
+            rlib = paths.r_user_library()
+            if rlib is not None:
+                env.insert("R_LIBS_USER", str(rlib))
+            temp = paths.runtime_temp_dir()
+            env.insert("TMPDIR", str(temp))
+            env.insert("TMP", str(temp))
+            env.insert("TEMP", str(temp))
+            tex_cache = paths.texmf_cache_dir()
+            env.insert("TEXMFCACHE", str(tex_cache))
+            env.insert("TEXMFVAR", str(tex_cache))
+            env.insert("TEXMFCONFIG", str(tex_cache))
+        except OSError:
+            pass
+        process.setProcessEnvironment(env)
+        process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+        process.finished.connect(self._knit_finished)
+        process.errorOccurred.connect(self._knit_error)
+        self._knit_process = process
+        progress = QProgressDialog("Rendering the Quarto document to PDF...", "Cancel", 0, 0, self)
+        progress.setWindowTitle("Render PDF (Quarto)")
         progress.setWindowModality(Qt.WindowModality.WindowModal)
         progress.setMinimumDuration(0)
         progress.canceled.connect(self._cancel_knit)
@@ -1963,6 +2216,22 @@ class MainWindow(QMainWindow):
         self._close_progress("_knit_progress")
         self.statusBar().showMessage("Knit cancelled", 3000)
 
+    def _rendered_pdf_path(self) -> Path | None:
+        if self.path is None:
+            return None
+        expected = self.path.with_suffix(".pdf")
+        if expected.is_file() and expected.stat().st_mtime >= self._knit_started_at - 1:
+            return expected
+        root = self.project_root if self.project_root is not None else self.path.parent
+        try:
+            candidates = [
+                p for p in root.rglob(f"{self.path.stem}.pdf")
+                if p.is_file() and p.stat().st_mtime >= self._knit_started_at - 1
+            ]
+        except OSError:
+            candidates = []
+        return max(candidates, key=lambda p: p.stat().st_mtime) if candidates else None
+
     def _knit_finished(self, exit_code: int, _status) -> None:
         process = self._knit_process
         log = ""
@@ -1974,17 +2243,23 @@ class MainWindow(QMainWindow):
             self._knit_canceled = False
             return
         if exit_code == 0:
-            if self._knit_output is not None and self._knit_output.is_file():
-                external.open_path(self._knit_output)
-                self.statusBar().showMessage("Knit complete — opening PDF", 4000)
+            rendered = self._rendered_pdf_path()
+            if rendered is not None:
+                external.open_path(rendered)
+                self.statusBar().showMessage(f"PDF complete — {rendered.name}", 4000)
             else:
-                QMessageBox.information(self, "Knit", "Knit finished, but no PDF output was found.\n\n" + log)
+                QMessageBox.information(
+                    self, "PDF render",
+                    "The render finished, but the expected PDF was not found.\n\n" + log
+                )
         else:
             box = QMessageBox(self)
-            box.setWindowTitle("Knit to PDF failed")
+            box.setWindowTitle("PDF render failed")
             box.setIcon(QMessageBox.Icon.Critical)
-            box.setText("rmarkdown::render returned an error.")
-            box.setInformativeText("Check the R Markdown log, LaTeX installation and YAML output settings.")
+            box.setText("The PDF render returned an error.")
+            box.setInformativeText(
+                "Check the render log, LaTeX installation, YAML format and project configuration."
+            )
             box.setDetailedText(log or "No output was captured.")
             box.exec()
 
@@ -2084,19 +2359,22 @@ class MainWindow(QMainWindow):
             "<b>Writing</b><br>"
             "Use the ribbon like a word processor. Bold, italic, headings, lists, tables, "
             "links, images and R chunks are translated to R Markdown continuously.<br><br>"
-            "<b>Files</b><br>"
-            "Autosave writes the .Rmd file after you pause typing. RStudio normally notices "
-            "the change and offers to reload it. Use <i>Open in RStudio</i> to open the current file.<br><br>"
+            "<b>Project files</b><br>"
+            "Open a project folder (Ctrl+Shift+O) to browse its tree in the Files tab. "
+            "Double-click a .qmd, .Rmd or .md file to switch documents. The app saves the "
+            "generated source after you pause typing.<br><br>"
             "<b>PDF and formatting</b><br>"
             "The generated source is PDF-clean by default: fonts, colours and line spacing stay "
-            "in the editor. Use <i>View → Preserve visual formatting</i> only for HTML output.<br><br>"
+            "in the editor. Use <i>View → Preserve visual formatting</i> only for HTML output. "
+            "Quarto files render with Quarto; R Markdown files render with rmarkdown.<br><br>"
             "<b>Work log</b><br>"
             "Type in the Work log tab and press Ctrl+Enter to append a timestamped entry to the "
             "designated log file. The log file can be changed with the save button in that tab.<br><br>"
             "<b>Shortcuts</b><br>"
             "Ctrl+B / I / U — emphasis &nbsp;·&nbsp; Ctrl+K — link &nbsp;·&nbsp; "
             "Ctrl+Alt+1…4 — headings &nbsp;·&nbsp; Ctrl+Alt+C — R chunk &nbsp;·&nbsp; "
-            "Ctrl+Alt+R — inline R &nbsp;·&nbsp; Ctrl+Shift+P — workspace panel &nbsp;·&nbsp; F1 — guide"
+            "Ctrl+Alt+R — inline R &nbsp;·&nbsp; Ctrl+Shift+O — open folder &nbsp;·&nbsp; "
+            "Ctrl+Shift+P — workspace panel &nbsp;·&nbsp; F1 — guide"
         )
 
     # ------------------------------------------------------------------
@@ -2130,6 +2408,14 @@ class MainWindow(QMainWindow):
         sample = paths.sample_path()
         if sample is not None:
             self.open_path(sample)
+
+    def open_quarto_demo(self) -> None:
+        sample = paths.quarto_sample_path()
+        if sample is not None:
+            self.open_path(sample)
+            self.side_tabs.setCurrentIndex(0)
+            self._set_project_root(sample.parent)
+            self.statusBar().showMessage("Quarto sample project opened", 3500)
 
     def selftest(self) -> bool:
         from tempfile import TemporaryDirectory

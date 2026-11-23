@@ -8,7 +8,8 @@ and emphasis; it cannot express fonts, sizes, colours or line spacing. R Markdow
 also executes R chunks, so the file format has semantics a Word document does
 not.
 
-The current target is **Knit to PDF**. The workable design is a rich
+The current target is **PDF via Quarto or rmarkdown**, inside a standalone
+project workspace rather than RStudio. The workable design is a rich
 **semantic** editor plus a two-layer serializer:
 
 1. Emit clean, PDF-safe Markdown for everything Markdown/LaTeX can express.
@@ -31,19 +32,18 @@ serialized in the default PDF mode.
    merged table cells and complex fenced divs cannot all be edited visually
    without losing or normalising syntax. The importer preserves YAML and code
    chunks exactly, uses the Pandoc AST for prose, and warns about approximations.
-3. **Two editors on one file.** RStudio and Rmd Studio can both write the same
-   file. A naive autosave can destroy the other editor's changes. The app uses
-   atomic writes plus a SHA-256 baseline and prompts on external change.
-4. **RStudio reload behaviour.** RStudio does not expose a general external
-   "push text into this open editor" API to third-party processes. Writing the
-   file and letting RStudio reload (or `Open in RStudio`) is the robust path.
-   A companion RStudio addin could provide tighter sync later.
-5. **Knit environment.** RStudio normally sets `RSTUDIO_PANDOC` and may have a
-   different library path. The app discovers Pandoc/Rscript, sets
-   `RSTUDIO_PANDOC`, and uses a writable runtime temp folder for R. PDF knitting
-   also needs LaTeX; the app detects pdflatex, offers a one-click TinyTeX
-   install (including `soul` for underline/strikeout), and shows the Rscript
-   log on failure.
+3. **Two editors on one file.** Another editor and Rmd Studio can both write the
+   same file. A naive autosave can destroy the other editor's changes. The app
+   uses atomic writes plus a SHA-256 baseline and prompts on external change.
+4. **External editor reload behaviour.** Other editors do not expose a general
+   external "push text into this open editor" API. Writing the file and letting
+   the editor reload is the robust path.
+5. **Render environment.** The app discovers Quarto, Pandoc, Rscript and
+   pdflatex, and sets the environment those tools need. Quarto on Windows is
+   sensitive to non-ASCII paths and temp/cache permissions, so the app supplies
+   a writable cache root, a UTF-8 codepage cache, short ASCII temp/cache paths
+   and the original `R_LIBS_USER`. If LaTeX is missing, the app offers a
+   one-click TinyTeX install (including `soul` for underline/strikeout).
 6. **Build log.** RStudio's Build pane is output-only and has no standard
    editable build-log file. The app therefore provides a dedicated Work log
    panel and writes to a user-designated append-only file (default
@@ -86,8 +86,8 @@ hand-built Markdown converter and a different packaging stack.
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │ MainWindow (main_window.py)                                  │
-│  ribbon · page · front matter · work log · preview           │
-│  autosave · conflicts · RStudio · Knit to PDF / TinyTeX      │
+│  ribbon · page · front matter · Files tree · work log        │
+│  preview · autosave · conflicts · Render PDF / TinyTeX       │
 └───────────────┬───────────────┬───────────────┬─────────────┘
                 │               │               │
       ┌─────────▼──────┐ ┌──────▼──────┐ ┌──────▼──────────┐
@@ -170,6 +170,17 @@ or **Add entry** writes the entry and refreshes the view. Default:
 log; this is a separate file the user can point at whatever their workflow
 expects.
 
+### Project tree
+
+The Files tab uses `QFileSystemModel` + `QTreeView` rooted at a project folder.
+Project roots are detected by walking up from the opened document for
+`_quarto.yml`, `_quarto.yaml`, `*.Rproj` or `.git`; otherwise the document folder
+is used. Double-clicking `.qmd`, `.Rmd` and `.md` files calls the same guarded
+`open_path` path used by menus/recent files, so unsaved changes prompt before a
+switch. The current document is selected and revealed after open. The last
+project root is persisted, and the tree auto-refreshes through
+`QFileSystemModel`.
+
 ### `sync.py`
 
 - Debounced autosave (default 800 ms) in the main window.
@@ -182,22 +193,29 @@ expects.
   reloads if clean, otherwise offers reload / keep / save-copy / cancel.
 - File deletion is handled separately.
 
-### RStudio / R integration
+### Standalone Quarto / R integration
 
-- `external.py` discovers `rstudio.exe`, `Rscript.exe` and `pandoc.exe` in PATH,
-  `%ProgramFiles%`, `%LOCALAPPDATA%`, and the Pandoc bundled with RStudio.
-- **Open in RStudio** saves and launches `rstudio.exe <file>`.
-- **Knit to PDF** saves, checks for pdflatex, runs
-  `rmarkdown::render(..., output_format='pdf_document', envir=new.env())` via a
-  `QProcess` progress dialog, sets `RSTUDIO_PANDOC` and PATH, and opens the PDF.
+- `external.py` discovers `quarto.exe`, `Rscript.exe`, `pdflatex.exe` and
+  `pandoc.exe` in PATH, `%ProgramFiles%`, `%LOCALAPPDATA%`, and the copies
+  bundled with RStudio/Quarto. RStudio is not exposed in the UI.
+- **Render PDF for `.qmd`** runs the standalone Quarto CLI
+  (`quarto render file.qmd --to pdf`) in the project root, with R and LaTeX on
+  PATH. **Render PDF for `.Rmd`** runs
+  `rmarkdown::render(..., output_format='pdf_document')`.
+- Quarto's Windows cache/codepage handling is fragile under non-ASCII paths and
+  sandboxed temp folders, so the app supplies:
+  - a writable `LOCALAPPDATA` fallback and a UTF-8 codepage cache;
+  - an ASCII short path for Quarto/R temp files and the TeX font cache;
+  - the user's original `R_LIBS_USER` so Quarto's R chunks can find packages.
 - **TinyTeX installation** is offered when pdflatex is missing. It installs into
   the app's local TinyTeX folder with the `soul` package included, so
   underline/strikeout in PDF work.
 - R gets a dedicated writable `rtemp` folder inside the app's data directory,
   because locked-down sessions and sandboxed child processes can make the system
   TEMP folder unusable.
-- No process injection. The app makes network calls only for the explicit
-  TinyTeX installation (and future AI chat, if enabled).
+- No process injection, no RStudio dependency in normal use. The app makes
+  network calls only for the explicit TinyTeX installation (and future AI chat,
+  if enabled).
 
 ## Formatting policy in detail
 
@@ -265,10 +283,13 @@ No runtime plugin is required. The recommended development additions are:
 - **Python 3.12+** and **PySide6-Essentials 6.12** (installed in `.venv`).
 - **PyInstaller 6.22** and **Pillow** for the exe and icon.
 - **pytest** for the converter/sync/UI tests.
-- **RStudio + R** for the target environment (both already installed here).
-- **Pandoc** is bundled with RStudio at
-  `C:\Program Files\RStudio\resources\app\bin\quarto\bin\tools\pandoc.exe`; no
-  separate install is needed. A standalone Pandoc is useful for testing.
+- **R** for code chunks and rmarkdown files.
+- **Quarto CLI** for `.qmd`. It is installed standalone here and can also be
+  discovered inside an existing RStudio installation.
+- **Pandoc** for import and HTML previews. It can come from Quarto, RStudio or a
+  standalone install.
+- **RStudio** is optional and no longer exposed in the UI; it is only one
+  possible source of bundled Quarto/Pandoc on a machine.
 - **Inno Setup 6** for the installer, **GitHub CLI** for releases, and
   PowerShell's `Set-AuthenticodeSignature` for signing with an installed
   certificate.
@@ -286,7 +307,7 @@ worse.
 
 1. Direct `.docx` import (Pandoc `-f docx`), with a review screen for styling.
 2. Spell check using the Windows spell-check API.
-3. Tighter RStudio addin bridge for reload/knit from inside the IDE.
+3. Project-wide search/replace and a faster project index for large folders.
 4. Embedded HTML preview (QWebEngine optional build) with a "no execution"
    Pandoc mode.
 5. Footnotes/citations/cross-reference preservation in the importer.

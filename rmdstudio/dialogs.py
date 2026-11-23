@@ -372,13 +372,14 @@ class SettingsDialog(BaseDialog):
         self.form.addRow("", self.visual_check)
 
         self.pandoc_edit = self._path_row("Pandoc", settings.value("pandoc_path", "", type=str), external.find_pandoc())
-        self.rstudio_edit = self._path_row("RStudio", settings.value("rstudio_path", "", type=str), external.find_rstudio())
         self.rscript_edit = self._path_row("Rscript", settings.value("rscript_path", "", type=str), external.find_rscript())
         self.pdflatex_edit = self._path_row("pdflatex", settings.value("pdflatex_path", "", type=str), external.find_pdflatex())
-        hint = QLabel("RStudio and Rscript are only needed for the RStudio/Knit buttons. "
+        self.quarto_edit = self._path_row("Quarto", settings.value("quarto_path", "", type=str), external.find_quarto())
+        hint = QLabel("Rscript executes R chunks and renders .Rmd files. Quarto renders .qmd files. "
                       "Pandoc is used to import existing Markdown and render previews. "
-                      "PDF knitting also needs LaTeX (TinyTeX, MiKTeX or TeX Live); "
-                      "TinyTeX can be installed from the Knit to PDF prompt.")
+                      "PDF output also needs LaTeX (TinyTeX, MiKTeX or TeX Live); "
+                      "TinyTeX can be installed from the Render PDF prompt. "
+                      "RStudio is not required.")
         hint.setObjectName("Hint")
         hint.setWordWrap(True)
         self._layout.addWidget(hint)
@@ -410,9 +411,9 @@ class SettingsDialog(BaseDialog):
         self.settings.setValue("autosave_ms", self.delay_spin.value())
         self.settings.setValue("preserve_visual", self.visual_check.isChecked())
         self.settings.setValue("pandoc_path", self.pandoc_edit.text().strip())
-        self.settings.setValue("rstudio_path", self.rstudio_edit.text().strip())
         self.settings.setValue("rscript_path", self.rscript_edit.text().strip())
         self.settings.setValue("pdflatex_path", self.pdflatex_edit.text().strip())
+        self.settings.setValue("quarto_path", self.quarto_edit.text().strip())
         self.settings.sync()
         external.clear_cache()
         super().accept()
@@ -427,11 +428,13 @@ class AboutDialog(BaseDialog):
         self._layout.insertWidget(0, logo)
         body = QLabel(
             f"<b>Rmd Studio {version}</b><br><br>"
-            "A graphite word-processor front end for R Markdown.<br><br>"
-            "Write with Word-like controls and keep a clean <code>.Rmd</code> file "
-            "updated in the background. Formatting that Markdown cannot express is "
-            "written as Pandoc HTML attributes.<br><br>"
-            "Everything runs locally. No accounts, telemetry or network calls."
+            "A graphite word-processor and project browser for Quarto and R Markdown.<br><br>"
+            "Write with Word-like controls, switch documents from the Files panel, and "
+            "keep clean <code>.qmd</code> / <code>.Rmd</code> source updated in the "
+            "background. Formatting that Markdown cannot express stays in the editor "
+            "unless the optional HTML styling layer is enabled.<br><br>"
+            "Everything runs locally. No accounts, telemetry or network calls except "
+            "explicit TinyTeX installation or previews."
         )
         body.setWordWrap(True)
         body.setTextFormat(Qt.TextFormat.RichText)

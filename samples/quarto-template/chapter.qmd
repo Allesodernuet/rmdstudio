@@ -1,0 +1,9 @@
+---
+title: "Second chapter"
+format: pdf
+---
+
+# A second document
+
+Switch between files using the Files panel. Each document keeps its own YAML
+front matter and autosave target.

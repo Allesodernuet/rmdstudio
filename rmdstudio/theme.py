@@ -217,6 +217,28 @@ QPlainTextEdit#LogInput {{
 QPlainTextEdit#LogInput:focus {{
     border-color: {ACCENT};
 }}
+QTreeView#FileTree {{
+    background: #121418;
+    border: none;
+    color: #d8d1c4;
+    selection-background-color: {ACCENT_DIM};
+    selection-color: {TEXT};
+    outline: none;
+}}
+QTreeView#FileTree::item {{
+    padding: 3px 4px;
+    border-radius: 4px;
+}}
+QTreeView#FileTree::item:hover {{
+    background: {PANEL};
+}}
+QTreeView#FileTree::item:selected {{
+    background: {ACCENT_DIM};
+    color: {TEXT};
+}}
+QTreeView#FileTree::branch {{
+    background: transparent;
+}}
 QTabWidget#PreviewTabs::pane, QTabWidget#WorkspaceTabs::pane {{
     border: 1px solid {BORDER};
     border-radius: 6px;
