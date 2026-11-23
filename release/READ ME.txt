@@ -1,5 +1,21 @@
-Rmd Studio 0.4.0
+Rmd Studio 0.5.0
 ================
+
+Markdown mode (default)
+-----------------------
+New documents are plain .md files. There is no YAML front matter and no PDF,
+R chunk or Quarto controls in this mode. Bold, italic, headings, lists, tables,
+links and images are written as normal Markdown, and Save/autosave write straight
+back to the .md file.
+
+If you open an existing .md file that already has YAML front matter, Rmd Studio
+preserves it but keeps it hidden so the file round-trips safely.
+
+R Markdown and Quarto
+---------------------
+Use File -> New R Markdown document or New Quarto document when you need YAML,
+R code chunks, citations or PDF output. Opening a .Rmd or .qmd file switches to
+the matching mode automatically.
 
 Install
 -------
@@ -7,7 +23,7 @@ Run "INSTALL.cmd" (recommended). It stages the Inno Setup installer in the
 system temp folder and launches it. This avoids a setup-path limitation when
 the app folder contains non-ASCII characters.
 
-You can also run "Rmd Studio Setup 0.4.0.exe" directly if the folder path is
+You can also run "Rmd Studio Setup 0.5.0.exe" directly if the folder path is
 plain ASCII.
 
 Portable use: "Rmd Studio.exe" is self-contained and needs no Python install.
@@ -17,15 +33,17 @@ Windows may show SmartScreen because the executable is unsigned. Choose
 
 First use
 ---------
-1. Click "Open project folder" and pick the folder containing your .qmd/.Rmd
+1. Click "Open project folder" and pick the folder containing your .md/.qmd/.Rmd
    documents. The Files tab shows the tree.
 2. Double-click a document to open it.
 3. Write. The source file is rewritten after you pause typing.
-4. Press "Render PDF". Quarto handles .qmd; rmarkdown handles .Rmd. If LaTeX is
-   missing, the app offers to install TinyTeX (about 100 MB, internet required).
+4. For .qmd or .Rmd, press "Render PDF" when ready. Quarto handles .qmd;
+   rmarkdown handles .Rmd. If LaTeX is missing, the app offers to install
+   TinyTeX (about 100 MB, internet required). Markdown mode has no render button.
 
-The app uses standalone Quarto, Rscript, Pandoc and LaTeX. RStudio is
-optional; install those tools separately if RStudio is not present.
+The app uses standalone Quarto, Rscript, Pandoc and LaTeX for R Markdown/Quarto
+work. RStudio is optional; install those tools separately if RStudio is not
+present. Plain Markdown editing needs none of them.
 
 Work log
 --------
@@ -36,10 +54,11 @@ Ctrl+Enter or "Add entry" submits.
 
 Zotero citations
 ----------------
-Link a Zotero/Better BibTeX .bib or CSL .json export in Settings, then use
-Insert -> Zotero citation (Ctrl+Alt+Z). Select one or more entries and the app
-inserts [@key] and adds a bibliography: entry to YAML when needed. The file is
-read fresh each time; Zotero does not need to be running.
+Available in R Markdown/Quarto mode. Link a Zotero/Better BibTeX .bib or CSL
+.json export in Settings, then use Insert -> Zotero citation (Ctrl+Alt+Z).
+Select one or more entries and the app inserts [@key] and adds a bibliography:
+entry to YAML when needed. The file is read fresh each time; Zotero does not
+need to be running.
 
 AI chat
 -------
@@ -57,10 +76,10 @@ review; the AI never edits or runs code automatically.
 
 Formatting notes
 ----------------
-Bold, italic, headings, lists, tables, links, code and R chunks become normal
-Quarto/R Markdown. Fonts, colours and line spacing stay in the editor and are
-NOT in the default PDF source. "View -> Preserve visual formatting" is an
-HTML-only option; PDF ignores it. Underline/strikeout need the soul LaTeX
+Bold, italic, headings, lists, tables, links and code become normal Markdown.
+In R Markdown/Quarto mode, fonts, colours and line spacing stay in the editor
+and are NOT in the default PDF source. "View -> Preserve visual formatting" is
+an HTML-only option; PDF ignores it. Underline/strikeout need the soul LaTeX
 package, which the app's TinyTeX installer includes.
 
 The app is unsigned until a trusted code-signing certificate is configured.

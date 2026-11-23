@@ -8,18 +8,24 @@ and emphasis; it cannot express fonts, sizes, colours or line spacing. R Markdow
 also executes R chunks, so the file format has semantics a Word document does
 not.
 
-The current target is **PDF via Quarto or rmarkdown**, inside a standalone
-project workspace rather than RStudio. The workable design is a rich
-**semantic** editor plus a two-layer serializer:
+The current target is a **Markdown-first editor** with optional **PDF via Quarto
+or rmarkdown**, inside a standalone project workspace rather than RStudio.
+Documents have one of three modes:
 
-1. Emit clean, PDF-safe Markdown for everything Markdown/LaTeX can express.
-2. Optionally emit Pandoc HTML attributes/spans/divs for visual extras, clearly
-   marked as HTML-only and **off by default**.
+- **Markdown** (default): new documents are `.md`, no YAML is added, and PDF,
+  R-chunk and citation controls are hidden.
+- **R Markdown**: YAML plus R chunks, citations and PDF rendering.
+- **Quarto**: YAML plus Quarto rendering.
 
-That gives a Word-like writing experience and a valid `.Rmd` whose PDF output
-is indistinguishable in structure from a file written directly in RStudio.
-Font/colour/spacing controls remain editor-side conveniences; they are not
-serialized in the default PDF mode.
+The workable design is a rich **semantic** editor plus a two-layer serializer:
+
+1. Emit clean Markdown for everything Markdown can express.
+2. In R Markdown/Quarto mode, optionally emit Pandoc HTML attributes/spans/divs
+   for visual extras, clearly marked as HTML-only and **off by default**.
+
+That gives a Word-like writing experience and a valid `.md`, `.Rmd` or `.qmd`
+file. Font/colour/spacing controls remain editor-side conveniences; they are not
+serialized in the default Markdown/PDF source.
 
 ## Primary concerns
 
@@ -90,7 +96,7 @@ hand-built Markdown converter and a different packaging stack.
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │ MainWindow (main_window.py)                                  │
-│  ribbon · page · front matter · Files tree · work log        │
+│  ribbon · page · mode-aware controls · Files tree · work log │
 │  AI chat · preview · autosave · conflicts · Render PDF       │
 └───────────────┬───────────────┬───────────────┬─────────────┘
                 │               │               │
@@ -107,12 +113,23 @@ hand-built Markdown converter and a different packaging stack.
                 │
       ┌─────────▼────────────────────────────────────────────┐
       │ model/                                               │
-      │  markdown.py  QTextDocument → Rmd (PDF-clean default)│
-      │  importer.py  Rmd → QTextDocument (Pandoc AST)       │
+      │  markdown.py  QTextDocument → Markdown/Pandoc        │
+      │  importer.py  Markdown → QTextDocument (Pandoc AST)  │
       │  blocks.py    formatting/chunk/table/image helpers   │
       │  style.py     custom property IDs + defaults         │
       └──────────────────────────────────────────────────────┘
 ```
+
+### Document modes
+
+`MainWindow` keeps one `_mode` value: `markdown`, `rmd` or `quarto`.
+`document_mode_for_path()` selects it from the file suffix when opening or
+saving; new documents start in `markdown`. `_update_mode_ui()` then hides or
+shows the YAML editor, Render PDF action, R chunk/inline-R actions, Zotero
+citation action and visual-styling toggle. Save filters and default suffixes
+follow the mode. Markdown mode forces `preserve_visual=False` so the file stays
+ordinary Markdown, while an existing `.md` front matter block is preserved but
+hidden.
 
 ### `model/style.py`
 

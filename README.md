@@ -1,12 +1,14 @@
 # Rmd Studio
 
-A graphite, word-processor style front end for **Quarto and R Markdown** on
-Windows, with a project file browser, a dedicated work log and PDF rendering.
+A graphite, word-processor style **Markdown** editor for Windows, with optional
+Quarto and R Markdown publishing, a project file browser and a dedicated work
+log.
 
-Write in a rich page with Word-like controls. Rmd Studio translates the document
-into normal, PDF-clean `.qmd` / `.Rmd` source continuously and renders it with
-Quarto or rmarkdown. RStudio is optional. The editor is dark graphite with
-éclair / parchment text and a caramel accent.
+Write in a rich page with Word-like controls. Rmd Studio writes ordinary
+Markdown continuously. New documents are plain `.md` files with no YAML front
+matter and no PDF controls. Switch to **R Markdown** or **Quarto** only when you
+need YAML, R chunks, citations or PDF rendering. RStudio is optional. The
+editor is dark graphite with éclair / parchment text and a caramel accent.
 
 ![Rmd Studio editor with project folders](screenshots/editor.png)
 
@@ -19,7 +21,7 @@ Quarto or rmarkdown. RStudio is optional. The editor is dark graphite with
 **Installer:** run `release\INSTALL.cmd` (recommended). It stages the Inno Setup
 installer in the system temp folder; this avoids a setup-path problem when the
 folder contains non-ASCII characters. On a plain ASCII path you can also run
-`release\Rmd Studio Setup 0.4.0.exe` directly.
+`release\Rmd Studio Setup 0.5.0.exe` directly.
 
 **Portable:** `release\Rmd Studio.exe` is self-contained and needs no Python
 install.
@@ -29,14 +31,23 @@ unsigned — choose *More info → Run anyway* if you trust it.
 
 ## What it does
 
+- **Markdown mode (default):** `Ctrl+N` starts a plain `.md` document with no
+  YAML and no PDF/R/Quarto controls. Bold, italic, headings, lists, tables,
+  links and images are written as normal Markdown, and autosave writes straight
+  back to the `.md` file.
+- **R Markdown and Quarto modes:** use **File → New R Markdown document** or
+  **New Quarto document** when you need YAML, R chunks, citations or PDF output.
+  Opening a `.Rmd` or `.qmd` file switches to the matching mode automatically.
 - Rich page editor with headings, bold, italic, underline, strike-through,
   superscript, subscript, font family, size, text colour, highlight, alignment,
   indent, line spacing and paragraph spacing.
 - Bullet and numbered lists, quotes, tables, links, images, horizontal rules.
-- R code chunks with a chunk-options dialog, inline code and inline R.
-- YAML front-matter editor (title, author, output, CSS, …).
+- R code chunks with a chunk-options dialog, inline code and inline R (R
+  Markdown/Quarto mode).
+- YAML front-matter editor (title, author, output, CSS, …) in R Markdown/Quarto
+  mode. Existing `.md` front matter is preserved but hidden.
 - **Project file browser:** open a folder, see its full tree in the Files tab,
-  and double-click a `.qmd`, `.Rmd` or `.md` file to switch documents. Project
+  and double-click a `.md`, `.qmd` or `.Rmd` file to switch documents. Project
   roots are detected from `_quarto.yml`, `.Rproj` or `.git`.
 - **Quarto support:** open a `.qmd` template, create a new Quarto document, and
   render it with the standalone Quarto CLI.
@@ -51,21 +62,33 @@ unsigned — choose *More info → Run anyway* if you trust it.
 - **AI chat** with optional document context, formatted insertion at the cursor,
   secure DPAPI key storage, and automatic append-only `ai-usage.jsonl` logging
   of every request, error and cancellation.
-- **Zotero citations:** link a Zotero/Better BibTeX `.bib` or CSL `.json` export,
-  search entries, and insert `[@key]` or multi-key citations. The bibliography
-  is added to YAML automatically.
-- **Render PDF** with a progress dialog and the render log on failure. If no
-  LaTeX engine is installed, the app offers to install TinyTeX (including
-  `soul` for underline/strikeout support) or lets you point at an existing
-  MiKTeX/TeX Live `pdflatex`.
+- **Zotero citations** in R Markdown/Quarto mode: link a Zotero/Better BibTeX
+  `.bib` or CSL `.json` export, search entries, and insert `[@key]` or multi-key
+  citations. The bibliography is added to YAML automatically.
+- **Render PDF** in R Markdown/Quarto mode, with a progress dialog and the render
+  log on failure. If no LaTeX engine is installed, the app offers to install
+  TinyTeX (including `soul` for underline/strikeout support) or lets you point
+  at an existing MiKTeX/TeX Live `pdflatex`.
 - Continuous autosave, external-change detection and conflict resolution for
   files also open in another editor.
 - Generated Markdown pane, rendered HTML preview, find & replace, undo/redo,
   word count, recent files, dark title bar.
 
-## PDF and formatting policy
+## Markdown, PDF and formatting policy
 
-The final target is a PDF rendered by Quarto or rmarkdown. The default source is:
+In **Markdown mode**, the source is a plain `.md` file:
+
+- no YAML is added to a new document
+- headings, emphasis, lists, quotes, tables, links and images become ordinary
+  Markdown
+- font/colour/spacing choices stay in the editor
+- PDF, R chunk and citation controls are hidden
+
+If you open an existing `.md` that already has YAML front matter, Rmd Studio
+preserves it but keeps it hidden so the file round-trips safely.
+
+In **R Markdown/Quarto mode**, the final target is a PDF rendered by Quarto or
+rmarkdown. The default source is:
 
 - For `.qmd`: YAML `format: pdf`
 - For `.Rmd`: YAML `output: pdf_document`
@@ -155,6 +178,9 @@ the network only when you press Send; there is no background AI activity.
 
 ## Zotero citations
 
+Zotero citations are available in **R Markdown/Quarto mode**, where they can be
+stored in YAML. The citation action is hidden in Markdown mode.
+
 Rmd Studio reads a bibliography file exported from Zotero:
 
 - **Zotero + Better BibTeX**: use a `.bib` auto-export
@@ -173,12 +199,13 @@ Zotero process.
 ## Standalone workflow
 
 1. **File → Open project folder** (`Ctrl+Shift+O`) picks the project root, or
-   open a Quarto/R Markdown file directly and the root is detected.
-2. Use the **Files** tab to browse the folder. Double-click a `.qmd`, `.Rmd` or
-   `.md` document to switch to it.
+   open a Markdown/Quarto/R Markdown file directly and the root is detected.
+2. Use the **Files** tab to browse the folder. Double-click a `.md`, `.qmd` or
+   `.Rmd` document to switch to it.
 3. Write. After a short pause (800 ms by default) the source file is rewritten
-   atomically.
-4. Press **Render PDF**. Quarto handles `.qmd`; rmarkdown handles `.Rmd`.
+   atomically. A Markdown document is saved directly as `.md`.
+4. For `.qmd` or `.Rmd`, press **Render PDF**. Quarto handles `.qmd`; rmarkdown
+   handles `.Rmd`. Markdown mode has no render button by design.
 5. The work log and source sit next to the project. No IDE is required.
 
 If another editor or process changes the file, the app detects the external hash
@@ -190,7 +217,8 @@ the standalone Quarto CLI or `Rscript`, which keeps the app independent.
 
 ## What you need installed
 
-The app detects these; nothing needs to be opened manually:
+Plain Markdown editing needs none of these. They are required only for rendering
+or importing the corresponding formats:
 
 - **R / Rscript** for R chunks and rmarkdown files.
 - **Quarto CLI** for `.qmd` files (bundled with RStudio if present, otherwise
@@ -204,8 +232,9 @@ RStudio is optional. Install standalone Quarto and Pandoc if it is not present.
 
 ## Importing existing documents
 
-Opening an existing `.qmd`, `.Rmd` or `.md` uses Pandoc. YAML and code chunks are
-preserved exactly; prose is rendered into the rich editor. Constructs that do not
+Opening an existing `.md`, `.qmd` or `.Rmd` uses Pandoc and selects the matching
+mode. YAML and code chunks are preserved exactly; prose is rendered into the
+rich editor. Constructs that do not
 have a visual equivalent (citations, cross-references, raw LaTeX, footnote
 bodies, complex divs) are approximated or kept as raw text, with a note in the
 preview panel. Save a copy if a document relies heavily on those features.
@@ -219,23 +248,24 @@ the ribbon controls to reintroduce any presentation you actually want. Opening
 
 | Shortcut | Action |
 |---|---|
-| `Ctrl+N/O/S/Shift+S` | New / open / save / save as |
+| `Ctrl+N` | New Markdown document |
+| `Ctrl+O` / `Ctrl+S` / `Ctrl+Shift+S` | Open / save / save as |
 | `Ctrl+Alt+Q` | New Quarto document |
 | `Ctrl+Shift+O` | Open project folder |
 | `Ctrl+B/I/U` | Bold / italic / underline |
 | `Ctrl+Shift+X` | Strike-through |
 | `Ctrl+K` | Link |
-| `Ctrl+Alt+Z` | Insert Zotero citation |
+| `Ctrl+Alt+Z` | Insert Zotero citation (R Markdown/Quarto) |
 | `Ctrl+Alt+1…4` | Heading 1–4 |
 | `Ctrl+Alt+0` | Normal paragraph |
 | `Ctrl+Shift+7/8` | Numbered / bullet list |
-| `Ctrl+Alt+C` | R code chunk |
-| `Ctrl+Alt+R` | Inline R expression |
+| `Ctrl+Alt+C` | R code chunk (R Markdown/Quarto) |
+| `Ctrl+Alt+R` | Inline R expression (R Markdown/Quarto) |
 | `Ctrl+Shift+P` | Workspace panel (Files / Work log / AI chat / Preview) |
 | `Ctrl+Enter` | Send an AI chat message |
-| `Ctrl+Shift+M` | YAML front matter |
+| `Ctrl+Shift+M` | YAML front matter (R Markdown/Quarto) |
 | `Ctrl+F` / `Ctrl+H` | Find / replace |
-| `Ctrl+Alt+K` | Render PDF |
+| `Ctrl+Alt+K` | Render PDF (R Markdown/Quarto) |
 | `F1` | Quick guide |
 
 ## Project layout
@@ -260,9 +290,9 @@ rmdstudio/
   model/
     style.py        shared constants and QTextFormat properties
     blocks.py       rich-document operations
-    markdown.py     QTextDocument → R Markdown serializer
-    importer.py     Rmd/Quarto → QTextDocument importer (Pandoc AST)
-samples/            welcome R Markdown and Quarto template project
+    markdown.py     QTextDocument → Markdown/Pandoc serializer
+    importer.py     Markdown/Rmd/Quarto → QTextDocument importer (Pandoc AST)
+samples/            Markdown and R Markdown welcome samples, Quarto project
 tests/              serializer, importer, sync, log and UI tests
 installer/          Inno Setup script
 tools/              icon generator and Authenticode signing script
@@ -295,6 +325,8 @@ message. Quarto/Pandoc/Rscript are invoked only for explicit actions.
 - Zotero integration reads a `.bib`/CSL JSON export; it does not query a running
   Zotero library through an API.
 - Spell check is not included yet.
+- Markdown mode intentionally has no YAML, R chunk, citation or PDF controls.
+  Switch to R Markdown/Quarto for those features.
 - Footnotes, citations, cross-references, merged table cells and arbitrary
   LaTeX are preserved only approximately on import.
 - Opening `.docx` directly (rather than pasting) is not implemented.

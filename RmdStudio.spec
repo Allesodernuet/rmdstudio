@@ -4,6 +4,7 @@ from pathlib import Path
 
 ROOT = Path(SPECPATH)
 datas = [
+    (str(ROOT / "samples" / "Welcome.md"), "samples"),
     (str(ROOT / "samples" / "Welcome.Rmd"), "samples"),
     (str(ROOT / "samples" / "quarto-template"), "samples/quarto-template"),
 ]

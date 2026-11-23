@@ -10,8 +10,9 @@
 - LaTeX (TinyTeX, MiKTeX or TeX Live) for PDF output
 - Inno Setup 6 for the Windows installer
 
-The app discovers these tools on PATH and in common install locations. Paths
-can be overridden in Settings.
+Plain Markdown editing does not require R, Quarto or LaTeX. The app discovers the
+other tools on PATH and in common install locations. Paths can be overridden in
+Settings.
 
 ## Development
 

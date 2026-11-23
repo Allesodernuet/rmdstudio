@@ -376,11 +376,12 @@ class SettingsDialog(BaseDialog):
         self.pdflatex_edit = self._path_row("pdflatex", settings.value("pdflatex_path", "", type=str), external.find_pdflatex())
         self.quarto_edit = self._path_row("Quarto", settings.value("quarto_path", "", type=str), external.find_quarto())
         self.bib_edit = self._bib_row("Zotero bib", settings.value("zotero_bib_path", "", type=str))
-        hint = QLabel("Rscript executes R chunks and renders .Rmd files. Quarto renders .qmd files. "
-                      "Pandoc is used to import existing Markdown and render previews. "
-                      "PDF output also needs LaTeX (TinyTeX, MiKTeX or TeX Live); "
-                      "TinyTeX can be installed from the Render PDF prompt. "
-                      "Link a Zotero/Better BibTeX .bib or CSL .json export to enable citations.")
+        hint = QLabel("Plain Markdown needs no external tools. Rscript executes R chunks and renders "
+                      ".Rmd files; Quarto renders .qmd files. Pandoc is used to import existing "
+                      "Markdown and render previews. PDF output also needs LaTeX (TinyTeX, MiKTeX "
+                      "or TeX Live); TinyTeX can be installed from the Render PDF prompt. "
+                      "Link a Zotero/Better BibTeX .bib or CSL .json export for citations in "
+                      "R Markdown/Quarto mode.")
         hint.setObjectName("Hint")
         hint.setWordWrap(True)
         self._layout.addWidget(hint)
@@ -524,11 +525,13 @@ class AboutDialog(BaseDialog):
         self._layout.insertWidget(0, logo)
         body = QLabel(
             f"<b>Rmd Studio {version}</b><br><br>"
-            "A graphite word-processor and project browser for Quarto and R Markdown.<br><br>"
-            "Write with Word-like controls, switch documents from the Files panel, and "
-            "keep clean <code>.qmd</code> / <code>.Rmd</code> source updated in the "
-            "background. Formatting that Markdown cannot express stays in the editor "
-            "unless the optional HTML styling layer is enabled.<br><br>"
+            "A graphite word-processor and project browser for Markdown, with optional "
+            "Quarto and R Markdown publishing.<br><br>"
+            "New documents are plain <code>.md</code> with no YAML. Switch to R Markdown "
+            "or Quarto for YAML, R chunks, citations and PDF output. Write with Word-like "
+            "controls, switch documents from the Files panel, and keep clean source "
+            "updated in the background. Formatting that Markdown cannot express stays in "
+            "the editor unless the optional HTML styling layer is enabled.<br><br>"
             "Everything runs locally. Network calls occur only when you explicitly "
             "send an AI request, install TinyTeX, or open a preview. No telemetry."
         )

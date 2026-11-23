@@ -158,6 +158,21 @@ def resource_path(relative: str) -> Path:
 
 
 def sample_path() -> Path | None:
+    source = resource_path("samples/Welcome.md")
+    if not source.is_file():
+        source = resource_path("samples/Welcome.Rmd")
+    if not source.is_file():
+        return None
+    try:
+        target = app_data_dir() / source.name
+        if not target.is_file() or target.stat().st_size != source.stat().st_size:
+            shutil.copy2(source, target)
+        return target
+    except OSError:
+        return source
+
+
+def rmd_sample_path() -> Path | None:
     source = resource_path("samples/Welcome.Rmd")
     if not source.is_file():
         return None

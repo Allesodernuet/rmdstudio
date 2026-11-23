@@ -91,6 +91,31 @@ from .model.style import (
 from .sync import ExternalConflict, FileSync, read_text
 
 
+MODE_MARKDOWN = "markdown"
+MODE_RMD = "rmd"
+MODE_QUARTO = "quarto"
+
+MODE_LABELS = {
+    MODE_MARKDOWN: "Markdown",
+    MODE_RMD: "R Markdown",
+    MODE_QUARTO: "Quarto",
+}
+MODE_SUFFIX = {
+    MODE_MARKDOWN: ".md",
+    MODE_RMD: ".Rmd",
+    MODE_QUARTO: ".qmd",
+}
+
+
+def document_mode_for_path(path: Path | None) -> str:
+    suffix = path.suffix.lower() if path is not None else ".md"
+    if suffix == ".qmd":
+        return MODE_QUARTO
+    if suffix in (".rmd", ".rmarkdown"):
+        return MODE_RMD
+    return MODE_MARKDOWN
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -98,7 +123,7 @@ class MainWindow(QMainWindow):
         self.defaults = Defaults()
         self.path: Path | None = None
         self.project_root: Path | None = None
-        self._is_quarto = False
+        self._mode = MODE_MARKDOWN
         self._loading = False
         self._generation = 0
         self._saved_generation = 0
@@ -198,7 +223,8 @@ class MainWindow(QMainWindow):
         return action
 
     def _build_actions(self) -> None:
-        self.action_new = self._action("New R Markdown document", "new", "Ctrl+N", self.new_document)
+        self.action_new = self._action("New Markdown document", "new", "Ctrl+N", self.new_document)
+        self.action_new_rmd = self._action("New R Markdown document", "new", None, self.new_rmd_document)
         self.action_new_quarto = self._action("New Quarto document", "new", "Ctrl+Alt+Q", self.new_quarto_document)
         self.action_open = self._action("Open document...", "open", "Ctrl+O", self.open_dialog)
         self.action_open_quarto = self._action("Open Quarto template...", "open", None, self.open_quarto_dialog)
@@ -281,13 +307,15 @@ class MainWindow(QMainWindow):
 
         self.action_about = self._action("About Rmd Studio", "info", None, self.show_about)
         self.action_guide = self._action("Quick guide", "info", "F1", self.show_guide)
-        self.action_sample = self._action("Open welcome sample", "new", None, self.open_demo)
+        self.action_sample = self._action("Open Markdown sample", "new", None, self.open_demo)
+        self.action_rmd_sample = self._action("Open R Markdown sample", "new", None, self.open_rmd_demo)
         self.action_quarto_sample = self._action("Open Quarto sample project", "new", None, self.open_quarto_demo)
 
     def _build_menus(self) -> None:
         bar = self.menuBar()
         file_menu = bar.addMenu("&File")
         file_menu.addAction(self.action_new)
+        file_menu.addAction(self.action_new_rmd)
         file_menu.addAction(self.action_new_quarto)
         file_menu.addSeparator()
         file_menu.addAction(self.action_open)
@@ -379,6 +407,7 @@ class MainWindow(QMainWindow):
 
         help_menu = bar.addMenu("&Help")
         help_menu.addAction(self.action_sample)
+        help_menu.addAction(self.action_rmd_sample)
         help_menu.addAction(self.action_quarto_sample)
         help_menu.addSeparator()
         help_menu.addAction(self.action_guide)
@@ -456,10 +485,10 @@ class MainWindow(QMainWindow):
         folder_button.setDefaultAction(self.action_open_folder)
         folder_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         top.addWidget(folder_button)
-        knit_button = QToolButton(top)
-        knit_button.setDefaultAction(self.action_knit)
-        knit_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        top.addWidget(knit_button)
+        self.knit_button = QToolButton(top)
+        self.knit_button.setDefaultAction(self.action_knit)
+        self.knit_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        top.addWidget(self.knit_button)
         top.addAction(self.action_settings)
         ribbon_layout.addWidget(top)
 
@@ -920,6 +949,10 @@ class MainWindow(QMainWindow):
         self.file_label = QLabel("Not saved")
         self.file_label.setMinimumWidth(160)
         bar.addWidget(self.file_label, 1)
+        self.mode_label = QLabel(MODE_LABELS[MODE_MARKDOWN])
+        self.mode_label.setToolTip("Document mode")
+        self.mode_label.setStyleSheet(f"color: {theme.MUTED};")
+        bar.addPermanentWidget(self.mode_label)
         self.sync_label = QLabel("")
         bar.addPermanentWidget(self.sync_label)
         self.word_label = QLabel("0 words")
@@ -1318,6 +1351,8 @@ class MainWindow(QMainWindow):
         return next(iter(found.values())) if len(found) == 1 else None
 
     def _set_bibliography_yaml(self, bibliography: Path, replace: bool) -> None:
+        if self._mode == MODE_MARKDOWN:
+            return
         yaml = self.front_edit.toPlainText()
         if self.path is not None:
             try:
@@ -1341,6 +1376,9 @@ class MainWindow(QMainWindow):
         self._on_modified()
 
     def insert_citation(self) -> None:
+        if self._mode == MODE_MARKDOWN:
+            self.statusBar().showMessage("Zotero citations are available in R Markdown or Quarto mode", 3500)
+            return
         if not self._ensure_saved():
             return
         bibliography = self._default_bibliography()
@@ -1426,6 +1464,9 @@ class MainWindow(QMainWindow):
         self.editor.setFocus()
 
     def insert_inline_r(self) -> None:
+        if self._mode == MODE_MARKDOWN:
+            self.statusBar().showMessage("Inline R is available in R Markdown or Quarto mode", 3000)
+            return
         cursor = self.editor.textCursor()
         cursor.beginEditBlock()
         blocks.insert_inline_code(cursor, "r ", self.defaults)
@@ -1434,6 +1475,9 @@ class MainWindow(QMainWindow):
         self.editor.setFocus()
 
     def insert_chunk(self) -> None:
+        if self._mode == MODE_MARKDOWN:
+            self.statusBar().showMessage("R code chunks are available in R Markdown or Quarto mode", 3000)
+            return
         dialog = ChunkDialog(self)
         if not dialog.exec():
             return
@@ -1510,16 +1554,20 @@ class MainWindow(QMainWindow):
             return f'title: "{safe}"\nformat: pdf'
         return f'title: "{safe}"\noutput: pdf_document'
 
-    def _new_document(self, first: bool = False, quarto: bool = False) -> None:
+    def _new_document(self, first: bool = False, mode: str = MODE_MARKDOWN) -> None:
         if not first and not self._maybe_save_changes():
             return
-        self._is_quarto = quarto
+        if mode not in MODE_LABELS:
+            mode = MODE_MARKDOWN
+        self._mode = mode
         self._loading = True
         try:
             self.path = None
             self.editor.set_base_path(None)
             self.editor.reset_document()
-            self.front_edit.setPlainText(self._default_yaml(quarto=quarto))
+            self.front_edit.setPlainText(
+                "" if mode == MODE_MARKDOWN else self._default_yaml(quarto=mode == MODE_QUARTO)
+            )
             self._generation = 0
             self._saved_generation = 0
             self._force_next_save = False
@@ -1537,24 +1585,28 @@ class MainWindow(QMainWindow):
         self._update_word_count()
         self._update_sync_label()
         self._update_log_path()
-        self._update_render_action()
+        self._update_mode_ui()
         self._select_current_in_files()
         self.chat_panel.refresh_settings()
         self._refresh_preview()
         self.editor.setFocus()
-        self.statusBar().showMessage("New Quarto document" if quarto else "New R Markdown document", 1800)
+        self.statusBar().showMessage(f"New {MODE_LABELS[mode]} document", 1800)
 
     def new_document(self) -> None:
-        self._new_document()
+        self._new_document(mode=MODE_MARKDOWN)
+
+    def new_rmd_document(self) -> None:
+        self._new_document(mode=MODE_RMD)
 
     def new_quarto_document(self) -> None:
-        self._new_document(quarto=True)
+        self._new_document(mode=MODE_QUARTO)
 
     def open_dialog(self) -> None:
         start = self.path.parent if self.path else Path.home() / "Documents"
         filename, _ = QFileDialog.getOpenFileName(
             self, "Open document", str(start),
-            "Quarto / R Markdown (*.qmd *.Rmd *.rmd *.md);;Quarto (*.qmd);;R Markdown (*.Rmd *.rmd);;All files (*)"
+            "Markdown / Quarto / R Markdown (*.md *.markdown *.qmd *.Rmd *.rmd);;"
+            "Markdown (*.md *.markdown);;Quarto (*.qmd);;R Markdown (*.Rmd *.rmd);;All files (*)"
         )
         if filename:
             self.open_path(Path(filename))
@@ -1586,7 +1638,7 @@ class MainWindow(QMainWindow):
         try:
             self._autosave_timer.stop()
             self.path = path
-            self._is_quarto = bool(path is not None and path.suffix.lower() == ".qmd")
+            self._mode = document_mode_for_path(path)
             self.editor.set_base_path(path.parent if path else None)
             yaml_text, result = import_rmd(
                 self.editor.document(), text, self.defaults,
@@ -1614,7 +1666,7 @@ class MainWindow(QMainWindow):
         self._update_word_count()
         self._update_sync_label()
         self._update_log_path()
-        self._update_render_action()
+        self._update_mode_ui()
         if path is not None:
             try:
                 inside = self.project_root is not None and path.resolve().is_relative_to(self.project_root)
@@ -1670,7 +1722,7 @@ class MainWindow(QMainWindow):
 
     def _serialize_current(self) -> SerializeResult:
         options = SerializeOptions(
-            preserve_visual=self._preserve_visual,
+            preserve_visual=self._preserve_visual and self._mode != MODE_MARKDOWN,
             defaults=self.defaults,
             document_dir=self.path.parent if self.path else None,
         )
@@ -1735,13 +1787,14 @@ class MainWindow(QMainWindow):
 
     def save_as(self) -> bool:
         start_dir = self.path.parent if self.path else Path.home() / "Documents"
-        default_suffix = ".qmd" if self._is_quarto else ".Rmd"
+        default_suffix = MODE_SUFFIX[self._mode]
         suggested = self.path.name if self.path else f"Untitled{default_suffix}"
-        filters = (
-            "Quarto (*.qmd);;R Markdown (*.Rmd *.rmd);;Markdown (*.md);;All files (*)"
-            if self._is_quarto
-            else "R Markdown (*.Rmd *.rmd);;Quarto (*.qmd);;Markdown (*.md);;All files (*)"
-        )
+        if self._mode == MODE_MARKDOWN:
+            filters = "Markdown (*.md *.markdown);;All files (*)"
+        elif self._mode == MODE_QUARTO:
+            filters = "Quarto (*.qmd);;Markdown (*.md *.markdown);;R Markdown (*.Rmd *.rmd);;All files (*)"
+        else:
+            filters = "R Markdown (*.Rmd *.rmd);;Markdown (*.md *.markdown);;Quarto (*.qmd);;All files (*)"
         filename, _ = QFileDialog.getSaveFileName(
             self, "Save document", str(start_dir / suggested), filters
         )
@@ -1754,33 +1807,38 @@ class MainWindow(QMainWindow):
         if old_path is not None and old_path.parent.resolve() != path.parent.resolve():
             self._copy_assets(old_path, path)
         self.path = path
-        self._is_quarto = path.suffix.lower() == ".qmd"
+        self._mode = document_mode_for_path(path)
         self.editor.set_base_path(path.parent)
         yaml = self.front_edit.toPlainText()
         changed_yaml = False
-        if re.search(r'^title:\s*"?Untitled"?\s*$', yaml, re.MULTILINE):
-            title = path.stem.replace("_", " ")
-            yaml = re.sub(r'^title:\s*"?Untitled"?\s*$', f'title: "{title}"', yaml, count=1, flags=re.MULTILINE)
-            changed_yaml = True
-        if self._is_quarto and "format:" not in yaml:
-            if "output: pdf_document" in yaml:
-                yaml = yaml.replace("output: pdf_document", "format: pdf")
+        if self._mode != MODE_MARKDOWN:
+            if re.search(r'^title:\s*"?Untitled"?\s*$', yaml, re.MULTILINE):
+                title = path.stem.replace("_", " ")
+                yaml = re.sub(r'^title:\s*"?Untitled"?\s*$', f'title: "{title}"', yaml, count=1, flags=re.MULTILINE)
                 changed_yaml = True
-        elif not self._is_quarto and "format:" in yaml and "output:" not in yaml:
-            yaml = yaml.replace("format: pdf", "output: pdf_document")
-            changed_yaml = True
+            if self._mode == MODE_QUARTO and "format:" not in yaml:
+                if "output: pdf_document" in yaml:
+                    yaml = yaml.replace("output: pdf_document", "format: pdf")
+                    changed_yaml = True
+            elif self._mode == MODE_RMD and "format:" in yaml and "output:" not in yaml:
+                yaml = yaml.replace("format: pdf", "output: pdf_document")
+                changed_yaml = True
+            if not yaml.strip():
+                yaml = self._default_yaml(path.stem.replace("_", " "), quarto=self._mode == MODE_QUARTO)
+                changed_yaml = True
         if changed_yaml:
             self.front_edit.blockSignals(True)
             self.front_edit.setPlainText(yaml)
             self.front_edit.blockSignals(False)
         self.sync.reset(path, yaml)
         self._force_next_save = True
+        self._update_mode_ui()
         accepted = self._write_to_path(force=True, silent=False)
         if accepted:
             self._add_recent(path)
             self._update_file_label()
             self._update_log_path()
-            self._update_render_action()
+            self._update_mode_ui()
             try:
                 inside = self.project_root is not None and path.resolve().is_relative_to(self.project_root)
             except (OSError, ValueError):
@@ -1854,10 +1912,35 @@ class MainWindow(QMainWindow):
     # UI state
     # ------------------------------------------------------------------
     def _update_render_action(self) -> None:
-        self.action_knit.setText("Render PDF" if self._is_quarto else "Knit to PDF")
+        markdown = self._mode == MODE_MARKDOWN
+        self.action_knit.setText("Render PDF" if self._mode == MODE_QUARTO else "Knit to PDF")
+        self.action_knit.setVisible(not markdown)
+        self.action_knit.setEnabled(not markdown)
+        if hasattr(self, "knit_button"):
+            self.knit_button.setVisible(not markdown)
+
+    def _update_mode_ui(self) -> None:
+        markdown = self._mode == MODE_MARKDOWN
+        for action in (self.action_front, self.action_inline_r, self.action_chunk, self.action_cite, self.action_visual):
+            action.setVisible(not markdown)
+            action.setEnabled(not markdown)
+        self.front_panel.setVisible((not markdown) and self.action_front.isChecked())
+        self.mode_label.setText(MODE_LABELS[self._mode])
+        self.mode_label.setToolTip(f"{MODE_LABELS[self._mode]} mode")
+        if markdown:
+            self.visual_label.setText("Markdown")
+            self.visual_label.setToolTip("Plain Markdown source; visual font styling stays in the editor")
+            self.visual_label.setStyleSheet(f"color: {theme.MUTED};")
+        else:
+            self.visual_label.setText("HTML styling" if self._preserve_visual else "PDF-clean source")
+            self.visual_label.setToolTip("Presentational formatting is written as Pandoc HTML attributes")
+            self.visual_label.setStyleSheet(
+                f"color: {theme.GOLD if self._preserve_visual else theme.MUTED};"
+            )
+        self._update_render_action()
 
     def _update_title(self) -> None:
-        name = self.path.name if self.path else ("Untitled.qmd" if self._is_quarto else "Untitled")
+        name = self.path.name if self.path else f"Untitled{MODE_SUFFIX[self._mode]}"
         marker = " •" if self.dirty else ""
         self.setWindowTitle(f"{name}{marker} — {APP_NAME}")
         self.doc_title_label.setText(f"{name}{marker}")
@@ -1977,6 +2060,13 @@ class MainWindow(QMainWindow):
             self._render_timer.stop()
 
     def _toggle_front(self, checked: bool) -> None:
+        if self._mode == MODE_MARKDOWN:
+            self.front_panel.hide()
+            if self.action_front.isChecked():
+                self.action_front.blockSignals(True)
+                self.action_front.setChecked(False)
+                self.action_front.blockSignals(False)
+            return
         self.front_panel.setVisible(checked)
         if checked:
             self.front_edit.setFocus()
@@ -1985,7 +2075,7 @@ class MainWindow(QMainWindow):
             self.front_edit.setTextCursor(cursor)
 
     def _set_visual_mode(self, enabled: bool) -> None:
-        if self._syncing:
+        if self._syncing or self._mode == MODE_MARKDOWN:
             return
         self._preserve_visual = enabled
         self.settings.setValue("preserve_visual", enabled)
@@ -2105,6 +2195,13 @@ class MainWindow(QMainWindow):
         return True
 
     def knit(self) -> None:
+        if self._mode == MODE_MARKDOWN:
+            QMessageBox.information(
+                self, "Markdown mode",
+                "PDF rendering is available for Quarto and R Markdown documents. "
+                "Use File → New Quarto document or New R Markdown document to switch.",
+            )
+            return
         if not self._save_document():
             return
         if self.path is None:
@@ -2116,7 +2213,7 @@ class MainWindow(QMainWindow):
             return
         if self._knit_process is not None:
             return
-        if self._is_quarto:
+        if self._mode == MODE_QUARTO:
             self._render_quarto(latex)
             return
         rscript = external.find_rscript(self.settings.value("rscript_path", "", type=str) or "")
@@ -2496,17 +2593,23 @@ class MainWindow(QMainWindow):
     def show_guide(self) -> None:
         QMessageBox.information(
             self, "Rmd Studio — quick guide",
-            "<b>Writing</b><br>"
-            "Use the ribbon like a word processor. Bold, italic, headings, lists, tables, "
-            "links, images and R chunks are translated to R Markdown continuously.<br><br>"
+            "<b>Markdown mode (default)</b><br>"
+            "New documents are plain .md files with no YAML front matter. Bold, italic, "
+            "headings, lists, tables, links and images are written as normal Markdown. "
+            "PDF, R chunk and citation controls are hidden in this mode.<br><br>"
+            "<b>R Markdown and Quarto</b><br>"
+            "Use File → New R Markdown document or New Quarto document when you need YAML, "
+            "R code chunks, citations or PDF rendering. Opening a .Rmd or .qmd file switches "
+            "to that mode automatically.<br><br>"
             "<b>Project files</b><br>"
             "Open a project folder (Ctrl+Shift+O) to browse its tree in the Files tab. "
-            "Double-click a .qmd, .Rmd or .md file to switch documents. The app saves the "
+            "Double-click a .md, .qmd or .Rmd file to switch documents. The app saves the "
             "generated source after you pause typing.<br><br>"
             "<b>PDF and formatting</b><br>"
-            "The generated source is PDF-clean by default: fonts, colours and line spacing stay "
-            "in the editor. Use <i>View → Preserve visual formatting</i> only for HTML output. "
-            "Quarto files render with Quarto; R Markdown files render with rmarkdown.<br><br>"
+            "In R Markdown and Quarto mode, the generated source is PDF-clean by default: "
+            "fonts, colours and line spacing stay in the editor. Use "
+            "<i>View → Preserve visual formatting</i> only for HTML output. Quarto files "
+            "render with Quarto; R Markdown files render with rmarkdown.<br><br>"
             "<b>Work log</b><br>"
             "Type in the Work log tab and press Ctrl+Enter to append a timestamped entry to the "
             "designated log file. The log file can be changed with the save button in that tab.<br><br>"
@@ -2515,8 +2618,9 @@ class MainWindow(QMainWindow):
             "Every request, error and cancellation is appended to ai-usage.jsonl. "
             "Use Insert reply to place an answer at the cursor for review.<br><br>"
             "<b>Zotero</b><br>"
-            "Link a Better BibTeX .bib or CSL .json export in Settings, then use "
-            "Ctrl+Alt+Z to insert citations. The bibliography is added to YAML on first use.<br><br>"
+            "In R Markdown or Quarto mode, link a Better BibTeX .bib or CSL .json export in "
+            "Settings, then use Ctrl+Alt+Z to insert citations. The bibliography is added to "
+            "YAML on first use.<br><br>"
             "<b>Shortcuts</b><br>"
             "Ctrl+B / I / U — emphasis &nbsp;·&nbsp; Ctrl+K — link &nbsp;·&nbsp; "
             "Ctrl+Alt+1…4 — headings &nbsp;·&nbsp; Ctrl+Alt+C — R chunk &nbsp;·&nbsp; "
@@ -2544,7 +2648,8 @@ class MainWindow(QMainWindow):
             table_menu.addAction(self.action_table_del_row)
             table_menu.addAction(self.action_table_del_col)
             table_menu.addAction(self.action_table_delete)
-        menu.addAction(self.action_chunk)
+        if self._mode != MODE_MARKDOWN:
+            menu.addAction(self.action_chunk)
         menu.exec(self.editor.mapToGlobal(position))
         menu.deleteLater()
 
@@ -2555,6 +2660,13 @@ class MainWindow(QMainWindow):
         sample = paths.sample_path()
         if sample is not None:
             self.open_path(sample)
+            self.statusBar().showMessage("Markdown sample opened", 3000)
+
+    def open_rmd_demo(self) -> None:
+        sample = paths.rmd_sample_path()
+        if sample is not None:
+            self.open_path(sample)
+            self.statusBar().showMessage("R Markdown sample opened", 3000)
 
     def open_quarto_demo(self) -> None:
         sample = paths.quarto_sample_path()
@@ -2567,26 +2679,41 @@ class MainWindow(QMainWindow):
     def selftest(self) -> bool:
         from tempfile import TemporaryDirectory
 
+        def write_sample(path: Path) -> str:
+            cursor = self.editor.textCursor()
+            cursor.insertText("Hello ")
+            fmt = QTextCharFormat(default_char_format(self.defaults))
+            fmt.setFontWeight(QFont.Weight.Bold)
+            cursor.insertText("world", fmt)
+            cursor.insertBlock()
+            blocks.insert_inline_code(cursor, "r 1 + 1", self.defaults)
+            self.path = path
+            self.editor.set_base_path(path.parent)
+            self.sync.reset(path, "")
+            self._force_next_save = True
+            if not self._write_to_path(force=True, silent=True):
+                raise RuntimeError("write failed")
+            return path.read_text(encoding="utf-8")
+
         try:
             with TemporaryDirectory() as folder:
-                path = Path(folder) / "selftest.Rmd"
-                self._new_document(first=True)
-                cursor = self.editor.textCursor()
-                cursor.insertText("Hello ")
-                fmt = QTextCharFormat(default_char_format(self.defaults))
-                fmt.setFontWeight(QFont.Weight.Bold)
-                cursor.insertText("world", fmt)
-                cursor.insertBlock()
-                blocks.insert_inline_code(cursor, "r 1 + 1", self.defaults)
-                self.front_edit.setPlainText(self._default_yaml("Selftest"))
-                self.path = path
-                self.editor.set_base_path(path.parent)
-                self.sync.reset(path, "")
-                self._force_next_save = True
-                if not self._write_to_path(force=True, silent=True):
+                self._new_document(first=True, mode=MODE_MARKDOWN)
+                if self._mode != MODE_MARKDOWN or self.front_edit.toPlainText():
                     return False
-                text = path.read_text(encoding="utf-8")
-                return "**world**" in text and "title: \"Selftest\"" in text and "`r 1 + 1`" in text
+                markdown = write_sample(Path(folder) / "selftest.md")
+                if markdown.lstrip().startswith("---") or 'title: "Selftest"' in markdown:
+                    return False
+                if "**world**" not in markdown or "`r 1 + 1`" not in markdown:
+                    return False
+
+                self._new_document(first=True, mode=MODE_RMD)
+                self.front_edit.setPlainText(self._default_yaml("Selftest"))
+                rmd = write_sample(Path(folder) / "selftest.Rmd")
+                return (
+                    "**world**" in rmd
+                    and 'title: "Selftest"' in rmd
+                    and "`r 1 + 1`" in rmd
+                )
         except Exception:
             return False
 
